@@ -1,12 +1,10 @@
-README
-MANIFEST
-MANIFEST.NOXSUB
 Changes
-Todo
-Makefile.PL
 Dumper.pm
-Dumper.pm.NOXSUB
 Dumper.xs
-Dumper.html
+MANIFEST
+Makefile.PL
+Todo
+ppport.h
 t/dumper.t
 t/overload.t
+t/pair.t
