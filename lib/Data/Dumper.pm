@@ -9,7 +9,7 @@
 
 package Data::Dumper;
 
-$VERSION = $VERSION = '1.21';
+$VERSION = $VERSION = '1.22';
 
 #$| = 1;
 
@@ -48,7 +48,7 @@ sub new {
 	     xpad       => $Pad,     # all lines prefixed by this string
 	     pad        => "",       # padding-per-level
 	     apad       => "",       # added padding for hash keys n such
-	     sep        => " ",      # list separator
+	     sep        => "",       # list separator
 	     seen       => {},       # local (nested) refs (id => [name, val])
 	     todump     => $v,       # values to dump []
 	     names      => $n,       # optional names for values []
@@ -123,15 +123,19 @@ sub Dump {
   local(@post);
 
   $s = $s->new(@_) unless ref $s;
+  $out = "";
 
   $s->{indent} = $Indent;
   $s->{purity} = $Purity;
   $s->{anonpfx} = $Varname;
   $s->{xpad} = $Pad;
-  if ($Indent >= 1) {
+  if ($Indent > 0) {
     $s->{pad} = "  ";
     $s->{sep} = "\n";
-#    $s->{expdepth} = 5;
+  }
+  else {
+    $s->{pad} = "";
+    $s->{sep} = "";
   }
 
   for $val (@{$s->{todump}}) {
@@ -175,6 +179,7 @@ sub _dump {
   return "undef" unless defined $val;
 
   $type = ref $val;
+  $out = "";
 
   if ($type) { 
     ($realpack, $realtype, $id) = ("$val" =~ /^(([^=]*)\=)?(.*)\((.*)\)$/o)[1,2,3];
@@ -182,12 +187,14 @@ sub _dump {
     # keep a tab on it so that we dont fall into recursive pit
     if (exists $s->{seen}{$id}) {
 #      if ($s->{expdepth} < $s->{level}) {
-      $out = $s->{seen}{$id}[0];
-      if ($s->{level} == 0) {
-	$out = $1 . '{' . $out . '}' if $name =~ /^([\@\%])/;
+      if ($s->{purity} and $s->{level} > 0) {
+	$out = '{}' if ($realtype eq 'HASH');
+	$out = '[]' if ($realtype eq 'ARRAY');
+	push @post, $name . " = " . $s->{seen}{$id}[0];
       }
       else {
-	push @post, $name . " = " . $s->{seen}{$id}[0] if $s->{purity} == 1;
+	$out = $s->{seen}{$id}[0];
+	$out = $1 . '{' . $out . '}' if $name =~ /^([\@\%])/;
       }
       return $out;
 #      }
@@ -282,7 +289,8 @@ sub _dump {
       $out .= $val;                      # if number or glob
     }
     else {
-      $out .= '\'' . $val .  '\'';       # if string
+      $val =~ s/([\\'])/\\$1/g;          #'
+      $out .= '\'' . $val .  '\'';       # if string 
     }
   }
 
@@ -294,8 +302,8 @@ __END__
 
 =head1 NAME
 
-Dumper - stringified perl data structures, suitable for both printing
-and eval
+Dumper - stringified perl data structures, suitable for both printing and
+eval
 
 
 =head1 SYNOPSIS
@@ -338,18 +346,20 @@ cannot be constructed using one Perl statement.  You can set
 C<$Data::Dumper::Purity> to 1 to get additional statements that will
 correctly fill in these references.
 
-In the extended usage form, the supplied references can be given user-specified
-names.  If a supplied name begins with a C<*>, the output will describe the
-dereferenced type of the supplied reference for hashes and arrays.
+In the extended usage form, the supplied references can be given
+user-specified names.  If a supplied name begins with a C<*>, the output
+will describe the dereferenced type of the supplied reference for hashes and
+arrays.
 
-Several styles of output are possible.  Style 0 gives the output without any
-newlines or indentation.  Style 1 outputs a compact form with newlines but
-no fancy indentation (each level in the structure is simply indented by a
-fixed amount of whitespace).  Style 2 (the default) outputs a very readable
-form which takes into account the length of hash keys (so the hash values
-line up).  Style 3 is like style 2, but also annotates the elements of
-arrays with their index (but the comment is on its own line, so array output
-consumes twice the number of lines).
+Several styles of output are possible.  Style 0 spews output without any
+newlines, indentation, or spaces between list items.  It is the most compact
+format possible that can still be called valid perl.  Style 1 outputs a
+readable form with newlines but no fancy indentation (each level in the
+structure is simply indented by a fixed amount of whitespace).  Style 2 (the
+default) outputs a very readable form which takes into account the length of
+hash keys (so the hash values line up).  Style 3 is like style 2, but also
+annotates the elements of arrays with their index (but the comment is on its
+own line, so array output consumes twice the number of lines).
 
 
 =head2 Exports
@@ -382,15 +392,15 @@ for tagging variable names in the output. The default is "VAR".
     sub new {bless {'a' => 1, 'b' => sub { return "foo" }}, $_[0]};
 
     package Fuz;                       # a wierd REF-REF-SCALAR object
-    sub new {bless \($_ = \'fuz'), $_[0]};
+    sub new {bless \($_ = \ 'fu\'z'), $_[0]};
 
     package main;
     $foo = Foo->new;
     $fuz = Fuz->new;
-    $boo = [ 1, [], "abcd", \*foo, 
-             {1 => 'a', 023 => 'b', 0x45 => 'c'},  
-             \\"pqr", $foo, $fuz];
-    $bar = eval(Dumper($boo)); 
+    $boo = [ 1, [], "abcd", \*foo,
+             {1 => 'a', 023 => 'b', 0x45 => 'c'}, 
+             \\"p\q\'r", $foo, $fuz];
+    $bar = eval(Dumper($boo));
     print($@) if $@;
     print Dumper($boo), Dumper($bar);  # pretty print (no array indices)
     
@@ -454,7 +464,7 @@ modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-Version 1.21    20 Nov 1995
+Version 1.22    22 Nov 1995
 
 
 =head1 SEE ALSO
