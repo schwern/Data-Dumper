@@ -6,6 +6,11 @@ HISTORY - release history for Data::Dumper
 
 =over 8
 
+=item 2.01beta  (10 April 1996)
+
+Minor bugfix (single digit numbers were always getting quoted).
+
+
 =item 2.00beta  (9 April 1996)
 
 C<Dumpxs> is now the exact XSUB equivalent of C<Dump>.  The XS version

@@ -9,7 +9,7 @@
 
 package Data::Dumper;
 
-$VERSION = $VERSION = '2.00';
+$VERSION = $VERSION = '2.01';
 
 #$| = 1;
 
@@ -279,7 +279,7 @@ sub _dump {
     $s->{level}--;
   }
   else {                                 # simple scalar
-    if ($val =~ /^-?[1-9]\d{1,8}$/) {    # safe decimal number
+    if ($val =~ /^-?[1-9]\d{0,8}$/) {    # safe decimal number
       $out .= $val;
     }
     elsif (ref(\$val) eq 'GLOB') {       # glob
@@ -618,7 +618,7 @@ modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-Version 2.00beta    9 April 1996
+Version 2.01beta    10 April 1996
 
 
 =head1 SEE ALSO
