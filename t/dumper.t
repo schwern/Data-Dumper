@@ -34,7 +34,7 @@ if (defined &Data::Dumper::Dumpxs) {
 }
 else {
   print "### XS extensions not loaded, will NOT run XS tests\n";
-  $TMAX = 86; $XS = 0;
+  $TMAX = 81; $XS = 0;
 }
 
 print "1..$TMAX\n";

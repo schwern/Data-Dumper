@@ -1,7 +1,7 @@
 This is the README file for Data::Dumper, the Perl
 data-structure printing/stringification module.
 
-This is version 2.10.  See the CHANGES section below for details on
+This is version 2.101.  See the CHANGES section below for details on
 the new features and fixes in this release.
 
 Perl version 5.004 or later is required to build and use this module.
@@ -58,8 +58,8 @@ either of these:
 
    a. If your platform has a C compiler AND is supported by xsubpp:
 
-   	 gzip -c -d Data-Dumper-2.10.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.10
+   	 gzip -c -d Data-Dumper-2.101.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.101
    	 perl Makefile.PL
    	 make test
    	 make install
@@ -67,8 +67,8 @@ either of these:
    b. If you have no C compiler OR if you don't want the XSUB extension 
       (no loss of functionality, only speed):
 
-   	 gzip -c -d Data-Dumper-2.10.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.10
+   	 gzip -c -d Data-Dumper-2.101.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.101
    	 perl Makefile.PL noxs                  # flips to non-xsub version
    	 make test
    	 make install
@@ -83,6 +83,10 @@ either of these:
 
 ---------------------------------------------------------------------
 CHANGES
+
+    2.101 (30 Apr 1999)
+            Minor release to sync with version in 5.005_03. Fixes
+            dump of dummy coderefs.
 
     2.10  (31 Oct 1998)
             Bugfixes for dumping related undef values, globs, and better

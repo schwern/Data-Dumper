@@ -6,6 +6,11 @@ HISTORY - public release history for Data::Dumper
 
 =over 8
 
+=item 2.101 (30 Apr 1999)
+
+Minor release to sync with version in 5.005_03.  Fixes dump of
+dummy coderefs.
+
 =item 2.10  (31 Oct 1998)
 
 Bugfixes for dumping related undef values, globs, and better double
