@@ -6,6 +6,12 @@ HISTORY - public release history for Data::Dumper
 
 =over 8
 
+=item 2.04beta  (28 August 1996)
+
+Made dump of glob names respect C<Useqq> setting.
+
+[@$%] are now escaped now when in double quotes.
+
 =item 2.03beta  (26 August 1996)
 
 Fixed Dumpxs.  It was appending trailing nulls to globnames.

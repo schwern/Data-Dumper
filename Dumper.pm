@@ -9,7 +9,7 @@
 
 package Data::Dumper;
 
-$VERSION = $VERSION = '2.03';
+$VERSION = $VERSION = '2.04';
 
 #$| = 1;
 
@@ -262,7 +262,7 @@ sub _dump {
 	($name =~ /[]}]$/) ? ($mname = $name) : ($mname = $name . '->');
       while (($k, $v) = each %$val) {
 	$k = $s->_dump($k, "");
-	$k = $1 if !$s->{purity} and $k =~ /^[\"\']([A-Za-z]\w*)[\"\']$/;
+	$k = $1 if !$s->{purity} and $k =~ /^[\"\']([A-Za-z_][\w:]*)[\"\']$/;
 	$sname = $mname . '{' . $k . '}';
 	$out .= $pad . $ipad . $k . " => ";
 
@@ -298,8 +298,13 @@ sub _dump {
     }
     elsif (ref(\$val) eq 'GLOB') {       # glob
       $sname = substr($val, 1);
-      $sname = '{\'' . $sname . '\'}' 
-	if $sname =~ s/([\\\'])/\\$1/g or $sname =~ /[^:\w]|^$/;
+      $sname = $s->_dump($sname, "");
+      if (!$s->{purity} and $sname =~ /^[\"\']([A-Za-z_][\w:]*)[\"\']$/) {
+	$sname = $1;
+      }
+      else {
+	$sname = '{' . $sname . '}';
+      }
       $out .= '*' . $sname;
     }
     else {				# string
@@ -386,7 +391,7 @@ sub Terse {
 # put a string value in double quotes
 sub qquote {
   local($_) = shift;
-  s/([\\\"])/\\$1/g;    
+  s/([\\\"\@\$\%])/\\$1/g;    
   s/\a/\\a/g;
   s/[\b]/\\b/g;
   s/\t/\\t/g;
@@ -704,7 +709,7 @@ modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-Version 2.03beta    26 August 1996
+Version 2.04beta    28 August 1996
 
 
 =head1 SEE ALSO

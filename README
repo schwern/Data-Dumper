@@ -1,7 +1,7 @@
 This is the README file for Data::Dumper, the Perl
 data-structure printing/stringification module.
 
-This is Version 2.03(beta).
+This is Version 2.04(beta).
 
 Perl Version 5.002 or later is required, if you wish to compile
 the XSUB extension.  Otherwise, 5.001 will suffice.
@@ -40,8 +40,8 @@ Do either 1a, or 1b, or 2.
    a. If your platform has a C compiler AND is supported by xsubpp AND you 
       have perl version 5.002 or later:
 
-   	 zcat Data-Dumper-2.03b.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.03
+   	 zcat Data-Dumper-2.04b.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.04
    	 perl Makefile.PL
    	 make test                              # this will run 4 tests
    	 make install
@@ -50,8 +50,8 @@ Do either 1a, or 1b, or 2.
       OR you're running some version > 5.001 but not quite 5.002 (no loss of 
       functionality, only speed):
 
-   	 zcat Data-Dumper-2.03b.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.03
+   	 zcat Data-Dumper-2.04b.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.04
          ./flip                                 # flips to non-xsub version
    	 perl Makefile.PL
    	 make test                              # this will run 2 test

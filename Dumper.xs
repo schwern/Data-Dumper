@@ -443,9 +443,10 @@ MODULE = Data::Dumper		PACKAGE = Data::Dumper         PREFIX = Data_Dumper_
 #
 # This is the exact equivalent of Dump.  Well, almost. The things that are
 # different as of now (due to Laziness):
-#   * hash keys are always quoted
+#   * hash keys are always quoted.
 #   * GLOBs are always dumped in curlies.
-#   * indentation doesnt take into account any leading VARnn string
+#   * indentation doesnt take into account any leading VARnn string.
+#   * doesnt do double-quotes yet.
 #
 # Doesnt leak, as far as I can tell from tests. 
 #

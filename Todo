@@ -30,4 +30,7 @@ Dump contents explicitly up to a certain depth and then use names for
 cross-referencing identical references.  (useful in debugger, in situations
 where we don't care so much for cross-references).
 
+=item Dumping contents of typeglobs
+
+
 =back
