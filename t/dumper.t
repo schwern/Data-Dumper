@@ -30,11 +30,11 @@ sub TEST {
 
 if (defined &Data::Dumper::Dumpxs) {
   print "### XS extension loaded, will run XS tests\n";
-  $TMAX = 138; $XS = 1;
+  $TMAX = 162; $XS = 1;
 }
 else {
   print "### XS extensions not loaded, will NOT run XS tests\n";
-  $TMAX = 69; $XS = 0;
+  $TMAX = 86; $XS = 0;
 }
 
 print "1..$TMAX\n";
@@ -231,11 +231,11 @@ EOT
 ##
 $WANT = <<'EOT';
 #$VAR1 = {
-#  "abc\000\efg" => "mno\000"
+#  "abc\0'\efg" => "mno\0"
 #};
 EOT
 
-$foo = { "abc\000\efg" => "mno\000" };
+$foo = { "abc\000\'\efg" => "mno\000" };
 {
   local $Data::Dumper::Useqq = 1;
   TEST q(Dumper($foo));
@@ -243,7 +243,7 @@ $foo = { "abc\000\efg" => "mno\000" };
 
   $WANT = <<"EOT";
 #\$VAR1 = {
-#  'abc\000\efg' => 'mno\000'
+#  'abc\0\\'\efg' => 'mno\0'
 #};
 EOT
 
@@ -445,8 +445,8 @@ EOT
 #  Second => \'Wags'
 #);
 #@dogs = (
-#  $kennels{First},
-#  $kennels{Second},
+#  ${$kennels{First}},
+#  ${$kennels{Second}},
 #  \%kennels
 #);
 #%mutts = %kennels;
@@ -484,8 +484,8 @@ EOT
 #  Second => \'Wags'
 #);
 #@dogs = (
-#  $kennels{First},
-#  $kennels{Second},
+#  ${$kennels{First}},
+#  ${$kennels{Second}},
 #  \%kennels
 #);
 #%mutts = %kennels;
@@ -561,8 +561,8 @@ EOT
 
 {
 
-sub a { print "foo\n" }
-$c = [ \&a ];
+sub z { print "foo\n" }
+$c = [ \&z ];
 
 ############# 121
 ##
@@ -573,8 +573,8 @@ $c = [ \&a ];
 #];
 EOT
 
-TEST q(Data::Dumper->new([\&a,$c],['a','c'])->Seen({'b' => \&a})->Dump;);
-TEST q(Data::Dumper->new([\&a,$c],['a','c'])->Seen({'b' => \&a})->Dumpxs;)
+TEST q(Data::Dumper->new([\&z,$c],['a','c'])->Seen({'b' => \&z})->Dump;);
+TEST q(Data::Dumper->new([\&z,$c],['a','c'])->Seen({'b' => \&z})->Dumpxs;)
 	if $XS;
 
 ############# 127
@@ -586,8 +586,8 @@ TEST q(Data::Dumper->new([\&a,$c],['a','c'])->Seen({'b' => \&a})->Dumpxs;)
 #];
 EOT
 
-TEST q(Data::Dumper->new([\&a,$c],['a','c'])->Seen({'*b' => \&a})->Dump;);
-TEST q(Data::Dumper->new([\&a,$c],['a','c'])->Seen({'*b' => \&a})->Dumpxs;)
+TEST q(Data::Dumper->new([\&z,$c],['a','c'])->Seen({'*b' => \&z})->Dump;);
+TEST q(Data::Dumper->new([\&z,$c],['a','c'])->Seen({'*b' => \&z})->Dumpxs;)
 	if $XS;
 
 ############# 133
@@ -599,8 +599,101 @@ TEST q(Data::Dumper->new([\&a,$c],['a','c'])->Seen({'*b' => \&a})->Dumpxs;)
 #);
 EOT
 
-TEST q(Data::Dumper->new([\&a,$c],['*a','*c'])->Seen({'*b' => \&a})->Dump;);
-TEST q(Data::Dumper->new([\&a,$c],['*a','*c'])->Seen({'*b' => \&a})->Dumpxs;)
+TEST q(Data::Dumper->new([\&z,$c],['*a','*c'])->Seen({'*b' => \&z})->Dump;);
+TEST q(Data::Dumper->new([\&z,$c],['*a','*c'])->Seen({'*b' => \&z})->Dumpxs;)
 	if $XS;
 
+}
+
+{
+  $a = [];
+  $a->[1] = \$a->[0];
+
+############# 139
+##
+  $WANT = <<'EOT';
+#@a = (
+#  undef,
+#  ''
+#);
+#$a[1] = \$a[0];
+EOT
+
+TEST q(Data::Dumper->new([$a],['*a'])->Purity(1)->Dump;);
+TEST q(Data::Dumper->new([$a],['*a'])->Purity(1)->Dumpxs;)
+	if $XS;
+}
+
+{
+  $a = \\\\\'foo';
+  $b = $$$a;
+
+############# 145
+##
+  $WANT = <<'EOT';
+#$a = \\\\\'foo';
+#$b = ${${$a}};
+EOT
+
+TEST q(Data::Dumper->new([$a,$b],['a','b'])->Purity(1)->Dump;);
+TEST q(Data::Dumper->new([$a,$b],['a','b'])->Purity(1)->Dumpxs;)
+	if $XS;
+}
+
+{
+  $a = [{ a => \$b }, { b => undef }];
+  $b = [{ c => \$b }, { d => \$a }];
+
+############# 151
+##
+  $WANT = <<'EOT';
+#$a = [
+#  {
+#    a => \[
+#        {
+#          c => ''
+#        },
+#        {
+#          d => \[]
+#        }
+#      ]
+#  },
+#  {
+#    b => undef
+#  }
+#];
+#${$a->[0]{a}}->[0]->{c} = $a->[0]{a};
+#${${$a->[0]{a}}->[1]->{d}} = $a;
+#$b = ${$a->[0]{a}};
+EOT
+
+TEST q(Data::Dumper->new([$a,$b],['a','b'])->Purity(1)->Dump;);
+TEST q(Data::Dumper->new([$a,$b],['a','b'])->Purity(1)->Dumpxs;)
+	if $XS;
+}
+
+{
+  $a = [[[[\\\\\'foo']]]];
+  $b = $a->[0][0];
+  $c = $${$b->[0][0]};
+
+############# 157
+##
+  $WANT = <<'EOT';
+#$a = [
+#  [
+#    [
+#      [
+#        \\\\\'foo'
+#      ]
+#    ]
+#  ]
+#];
+#$b = $a->[0][0];
+#$c = ${${$a->[0][0][0][0]}};
+EOT
+
+TEST q(Data::Dumper->new([$a,$b,$c],['a','b','c'])->Purity(1)->Dump;);
+TEST q(Data::Dumper->new([$a,$b,$c],['a','b','c'])->Purity(1)->Dumpxs;)
+	if $XS;
 }

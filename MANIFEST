@@ -1,7 +1,6 @@
 README
 MANIFEST
 MANIFEST.NOXSUB
-MacPerl.README
 Changes
 Todo
 Makefile.PL
@@ -9,6 +8,5 @@ Dumper.pm
 Dumper.pm.NOXSUB
 Dumper.xs
 Dumper.html
-macblib.sit.hqx
 t/dumper.t
 t/overload.t

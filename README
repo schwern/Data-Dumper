@@ -1,7 +1,7 @@
 This is the README file for Data::Dumper, the Perl
 data-structure printing/stringification module.
 
-This is version 2.09.  See the CHANGES section below for details on
+This is version 2.10.  See the CHANGES section below for details on
 the new features and fixes in this release.
 
 Perl version 5.004 or later is required to build and use this module.
@@ -9,10 +9,7 @@ Perl version 5.004 or later is required to build and use this module.
 
 ---NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE---NOTE---
 |                                                                       |
-|  Data-Dumper comes standard with perl from version 5.004_71.  This    |
-|  version is identical to the one found in the latest development      |
-|  release, 5.004_75.  You should install this if (and only if) your    |
-|  version of perl doesn't already come with it.                        |
+|  Data-Dumper comes standard with perl from version 5.004_71.          |
 |                                                                       |
 |  Building the XSUB version *requires* a C compiler that groks ANSI    |
 |  prototypes.  You may install the non-XSUB version if you're not so   |
@@ -61,8 +58,8 @@ either of these:
 
    a. If your platform has a C compiler AND is supported by xsubpp:
 
-   	 gzip -c -d Data-Dumper-2.09.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.09
+   	 gzip -c -d Data-Dumper-2.10.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.10
    	 perl Makefile.PL
    	 make test
    	 make install
@@ -70,8 +67,8 @@ either of these:
    b. If you have no C compiler OR if you don't want the XSUB extension 
       (no loss of functionality, only speed):
 
-   	 gzip -c -d Data-Dumper-2.09.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.09
+   	 gzip -c -d Data-Dumper-2.10.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.10
    	 perl Makefile.PL noxs                  # flips to non-xsub version
    	 make test
    	 make install
@@ -87,6 +84,24 @@ either of these:
 ---------------------------------------------------------------------
 CHANGES
 
+    2.10  (31 Oct 1998)
+            Bugfixes for dumping related undef values, globs, and better
+	    double quoting: three patches suggested by Gisle Aas
+	    <gisle@aas.no>.
+
+            Escaping of single quotes in the XS version could get tripped
+	    up by the presence of nulls in the string. Fix suggested by
+	    Slaven Rezic <eserte@cs.tu-berlin.de>.
+
+            Rather large scale reworking of the logic in how seen values
+	    are stashed.  Anonymous scalars that may be encountered while
+	    traversing the structure are properly tracked, in case they
+	    become used in data dumped in a later pass. There used to be a
+	    problem with the previous logic that prevented such structures
+	    from being dumped correctly.
+
+            Various additions to the testsuite.
+
     2.09  (9 July 1998)
             Implement $Data::Dumper::Bless, suggested by Mark Daku
 	    <daku@nortel.ca>.
@@ -94,20 +109,3 @@ CHANGES
     2.081 (15 January 1998)
             Minor release to fix Makefile.PL not accepting
             MakeMaker args.
- 
-    2.08  (7 December 1997)
-            Glob dumps don't output superflous 'undef' anymore.
-
-            Fixes from Gisle Aas <gisle@aas.no> to make Dumper()
-            work with overloaded strings in recent perls, and his
-            new testsuite.
-
-            require 5.004.
-
-            A separate flag to always quote hash keys (on by
-            default).
-
-            Recreating known CODE refs is now better supported.
-
-            Changed flawed constant SCALAR bless workaround.
-

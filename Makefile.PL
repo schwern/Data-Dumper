@@ -42,5 +42,4 @@ WriteMakefile(
 			     COMPRESS	=> 'gzip -9f',
 	      		     SUFFIX	=> 'gz',
 			   },
-	MAN3PODS	=> ' ',
 );
