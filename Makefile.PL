@@ -3,6 +3,6 @@ WriteMakefile(
               NAME => "Data::Dumper",
               DISTNAME => "Data-Dumper",
 	      PM => { 'Dumper.pm' => '$(INST_LIBDIR)/Dumper.pm' },
-              VERSION => '2.04',
+              VERSION => '2.05',
               'dist' => {COMPRESS=>'gzip -9f', SUFFIX => 'gz'}
              );

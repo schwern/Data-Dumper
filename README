@@ -1,21 +1,30 @@
 This is the README file for Data::Dumper, the Perl
 data-structure printing/stringification module.
 
-This is Version 2.04(beta).
+This is Version 2.05.  See the "Changes" file for details on
+the new features and fixes in this release.
 
 Perl Version 5.002 or later is required, if you wish to compile
-the XSUB extension.  Otherwise, 5.001 will suffice.
+the XSUB extension.  Otherwise, 5.001 should suffice.
 
 You may find this module useful if you:
 
    * are writing an application that must display perl data
-     structures (Dumper is being used in a perl debugger)
+     structures.
 
    * want to store some data structures to disk, in either a
      compact or perl readable format (Dumper outputs pure perl,
      so you don't have to invent your own portable data format, or
      parse it;  simply "do FILE" or read the data back in with 
-     perl and eval() it).
+     perl and eval() it).  See the MLDBM module for an example of
+     one such use.
+
+   * want a simple, yet powerful, persistence engine that can be
+     quickly integrated into your application, and is a breeze to
+     debug.
+
+   * want a facility to make copies of data, or quickly find
+     differences between data structures.
 
 Dumper can be efficient if you are on a system supported by MakeMaker
 and xsubpp, the perl extension building tools.  In this case, Dumper 
@@ -40,21 +49,21 @@ Do either 1a, or 1b, or 2.
    a. If your platform has a C compiler AND is supported by xsubpp AND you 
       have perl version 5.002 or later:
 
-   	 zcat Data-Dumper-2.04b.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.04
+   	 zcat Data-Dumper-2.05.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.05
    	 perl Makefile.PL
-   	 make test                              # this will run 4 tests
+   	 make test                              # this will run 40 tests
    	 make install
 
    b. If you have no C compiler OR if you don't want the XSUB extension 
       OR you're running some version > 5.001 but not quite 5.002 (no loss of 
       functionality, only speed):
 
-   	 zcat Data-Dumper-2.04b.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.04
+   	 zcat Data-Dumper-2.05.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.05
          ./flip                                 # flips to non-xsub version
    	 perl Makefile.PL
-   	 make test                              # this will run 2 test
+   	 make test                              # this will run 20 tests
    	 make install
 
       If the "perl Makefile.PL" step fails due to very old MakeMaker, you can

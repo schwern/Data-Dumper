@@ -9,11 +9,11 @@
 
 package Data::Dumper;
 
-$VERSION = $VERSION = '2.04';
+$VERSION = $VERSION = '2.05';
 
 #$| = 1;
 
-require 5.002;
+require 5.001;
 require Exporter;
 ##require DynaLoader;
 
@@ -33,6 +33,11 @@ $Pad = "" unless defined $Pad;
 $Varname = "VAR" unless defined $Varname;
 $Useqq = 0 unless defined $Useqq;
 $Terse = 0 unless defined $Terse;
+$Freezer = "" unless defined $Freezer;
+$Toaster = "" unless defined $Toaster;
+$Deepcopy = 0 unless defined $Deepcopy;
+#$Expdepth = 0 unless defined $Expdepth;
+#$Maxdepth = 0 unless defined $Maxdepth;
 
 #
 # expects an arrayref of values to be dumped.
@@ -50,24 +55,26 @@ sub new {
   my($s) = { 
              level      => 0,        # current recursive depth
 	     indent     => $Indent,  # various styles of indenting
-	     xpad       => $Pad,     # all lines prefixed by this string
-	     pad        => "",       # padding-per-level
+	     pad	=> $Pad,     # all lines prefixed by this string
+	     xpad       => "",       # padding-per-level
 	     apad       => "",       # added padding for hash keys n such
 	     sep        => "",       # list separator
 	     seen       => {},       # local (nested) refs (id => [name, val])
 	     todump     => $v,       # values to dump []
 	     names      => $n,       # optional names for values []
-	     anonpfx    => $Varname, # prefix to use for tagging nameless ones
+	     varname    => $Varname, # prefix to use for tagging nameless ones
              purity     => $Purity,  # degree to which output is evalable
              useqq 	=> $Useqq,   # use "" for strings (backslashitis ensues)
              terse 	=> $Terse,   # avoid name output (where feasible)
-#             freezer => "",          # name of Freezer method for objects
-#             maxdepth => 0,          # depth beyond which we give up
-#	      expdepth   => 0,        # cutoff for explicit dumping
+             freezer	=> $Freezer, # name of Freezer method for objects
+             toaster	=> $Toaster, # name of method to revive objects
+             deepcopy	=> $Deepcopy,# dont cross-ref, except to stop recursion
+#	     expdepth   => $Expdepth,# cutoff depth for explicit dumping
+#	     maxdepth	=> $Maxdepth,# depth beyond which we give up
 	   };
 
   if ($Indent > 0) {
-    $s->{pad} = "  ";
+    $s->{xpad} = "  ";
     $s->{sep} = "\n";
   }
   return bless($s, $c);
@@ -163,20 +170,20 @@ sub Dump {
       }
     }
     else {
-      $name = "\$" . $s->{anonpfx} . $i;
+      $name = "\$" . $s->{varname} . $i;
     }
 
     my $valstr = $s->_dump($val, $name);
     if ($s->{terse} and !@post) {
-      $out .= $s->{xpad} . $valstr . $s->{sep};
+      $out .= $s->{pad} . $valstr . $s->{sep};
     }
     else {
       if ($s->{indent} >= 2) {
 	my $extrapad = ' ' x (length($name) + 3);
 	$valstr =~ s|\n(.)|\n$extrapad$1|g;
       }
-      $out .= $s->{xpad} . "$name = " . $valstr . ';' . $s->{sep};
-      $out .= $s->{xpad} . join(';' . $s->{sep} . $s->{xpad}, @post) 
+      $out .= $s->{pad} . "$name = " . $valstr . ';' . $s->{sep};
+      $out .= $s->{pad} . join(';' . $s->{sep} . $s->{pad}, @post) 
 	. ';' . $s->{sep} if @post;
     }
     push @out, $out;
@@ -198,31 +205,59 @@ sub _dump {
   $type = ref $val;
   $out = "";
 
-  if ($type) { 
-    ($realpack, $realtype, $id) = ("$val" =~ /^(?:(.*)\=)?([^=]*)\(([^(]*)\)$/);
+  if ($type) {
+
+    # prep it, if it looks like an object
+    if ($type =~ /[a-z_:]/) {
+      my $freezer = $s->{freezer};
+      # UNIVERSAL::can should be used here, when we can require 5.004
+      if ($freezer) {
+	eval { $val->$freezer() };
+	carp "WARNING(Freezer method call failed): $@" if $@;
+      }
+    }
+
+    if (exists $ {$type . "::OVERLOAD"}{'""'}) {
+      # let's hope this is harmless
+      bless $val, "Dumper::FAKE";
+      ($realpack, $realtype, $id) = ("$val" =~ /^(?:(.*)\=)?([^=]*)\(([^\(]*)\)$/);
+      bless $val, $type;
+      $realpack = $type;
+    }
+    else {
+      ($realpack, $realtype, $id) = ("$val" =~ /^(?:(.*)\=)?([^=]*)\(([^\(]*)\)$/);
+    }
     
     # keep a tab on it so that we dont fall into recursive pit
     if (exists $s->{seen}{$id}) {
-#      if ($s->{expdepth} < $s->{level}) {
+#     if ($s->{expdepth} < $s->{level}) {
       if ($s->{purity} and $s->{level} > 0) {
-	$out = '{}' if ($realtype eq 'HASH');
-	$out = '[]' if ($realtype eq 'ARRAY');
-	push @post, $name . " = " . $s->{seen}{$id}[0];
+	$out = ($realtype eq 'HASH') ? '{}' :
+	  ($realtype eq 'ARRAY') ? '[]' : "''";
+	  push @post, $name . " = " . $s->{seen}{$id}[0];
       }
       else {
 	$out = $s->{seen}{$id}[0];
-	$out = $1 . '{' . $out . '}' if $name =~ /^([\@\%])/;
+	if ($name =~ /^([\@\%])/) {
+	  my $start = $1;
+	  if ($out =~ /^\\$start/) {
+	    $out = substr($out, 1);
+	  }
+	  else {
+	    $out = $start . '{' . $out . '}';
+	  }
+	}
       }
       return $out;
-#      }
+#     }
     }
     else {
       # store our name
-      $s->{seen}{$id} = [($name =~ /^[@%].*$/) ? ('\\' . $name ) : $name, $val];
+      $s->{seen}{$id} = [ ($name =~ /^[@%].*$/) ? ('\\' . $name ) : $name, $val ];
     }
 
     $s->{level}++;
-    $ipad = $s->{pad} x $s->{level};
+    $ipad = $s->{xpad} x $s->{level};
 
     if ($realpack) {          # we have a blessed ref
       $out = 'bless( ';
@@ -230,57 +265,62 @@ sub _dump {
       $s->{apad} .= '       ' if ($s->{indent} >= 2);
     }
     
-    if ($realtype eq 'SCALAR' or $realtype eq 'GLOB') {
+    if ($realtype eq 'SCALAR') {
       if ($realpack) {
-	$out .= '\\' . '($_ = ' . $s->_dump($$val, "\$$name") . ')';
+	$out .= '\\' . '($_ = ' . $s->_dump($$val, "") . ')';
       }
       else {
-	$out .= '\\' . $s->_dump($$val, "\$$name");
+	$out .= '\\' . $s->_dump($$val, "");
       }
+    }
+    elsif ($realtype eq 'GLOB') {
+	$out .= '\\' . $s->_dump($$val, "");
     }
     elsif ($realtype eq 'ARRAY') {
       my($v, $pad, $mname);
       my($i) = 0;
       $out .= ($name =~ /^\@/) ? '(' : '[';
-      $pad = $s->{sep} . $s->{xpad} . $s->{apad};
+      $pad = $s->{sep} . $s->{pad} . $s->{apad};
       ($name =~ /^\@(.*)$/) ? ($mname = "\$" . $1) : 
 	($name =~ /[]}]$/) ? ($mname = $name) : ($mname = $name . '->');
+      $mname .= '->' if $mname =~ /^\*.+\{[A-Z]+\}$/;
       for $v (@$val) {
 	$sname = $mname . '[' . $i . ']';
 	$out .= $pad . $ipad . '#' . $i if $s->{indent} >= 3;
 	$out .= $pad . $ipad . $s->_dump($v, $sname);
 	$out .= "," if $i++ < $#$val;
       }
-      $out .= $pad . ($s->{pad} x ($s->{level} - 1)) if $i;
+      $out .= $pad . ($s->{xpad} x ($s->{level} - 1)) if $i;
       $out .= ($name =~ /^\@/) ? ')' : ']';
     }
     elsif ($realtype eq 'HASH') {
       my($k, $v, $pad, $lpad, $mname);
       $out .= ($name =~ /^\%/) ? '(' : '{';
-      $pad = $s->{sep} . $s->{xpad} . $s->{apad};
+      $pad = $s->{sep} . $s->{pad} . $s->{apad};
       $lpad = $s->{apad};
       ($name =~ /^\%(.*)$/) ? ($mname = "\$" . $1) : 
 	($name =~ /[]}]$/) ? ($mname = $name) : ($mname = $name . '->');
+      $mname .= '->' if $mname =~ /^\*.+\{[A-Z]+\}$/;
       while (($k, $v) = each %$val) {
-	$k = $s->_dump($k, "");
-	$k = $1 if !$s->{purity} and $k =~ /^[\"\']([A-Za-z_][\w:]*)[\"\']$/;
-	$sname = $mname . '{' . $k . '}';
-	$out .= $pad . $ipad . $k . " => ";
+	my $nk = $s->_dump($k, "");
+	$nk = $1 if !$s->{purity} and $nk =~ /^[\"\']([A-Za-z_][\w:]*)[\"\']$/;
+	$sname = $mname . '{' . $nk . '}';
+	$out .= $pad . $ipad . $nk . " => ";
 
 	# temporarily alter apad
-	$s->{apad} .= (" " x (length($k) + 4)) if $s->{indent} >= 2;
-	$out .= $s->_dump($v, $sname) . ",";
+	$s->{apad} .= (" " x (length($nk) + 4)) if $s->{indent} >= 2;
+	$out .= $s->_dump($val->{$k}, $sname) . ",";
 	$s->{apad} = $lpad if $s->{indent} >= 2;
       }
       if (substr($out, -1) eq ',') {
 	chop $out;
-	$out .= $pad . ($s->{pad} x ($s->{level} - 1));
+	$out .= $pad . ($s->{xpad} x ($s->{level} - 1));
       }
       $out .= ($name =~ /^\%/) ? ')' : '}';
     }
     elsif ($realtype eq 'CODE') {
-      $out .= "$val";
-      $out = 'sub { \'' . $out . '\' }';
+      $out .= '"DUMMY"';
+      $out = 'sub { ' . $out . ' }';
       carp "Encountered CODE ref, using dummy placeholder" if $s->{purity};
     }
     else {
@@ -289,26 +329,53 @@ sub _dump {
     
     if ($realpack) { # we have a blessed ref
       $out .= ', \'' . $realpack . '\'' . ' )';
+      $out .= '->' . $s->{toaster} . '()'  if $s->{toaster} ne '';
       $s->{apad} = $blesspad;
     }
     $s->{level}--;
+
   }
   else {                                 # simple scalar
-    if ($val =~ /^-?[1-9]\d{0,8}$/) {    # safe decimal number
-      $out .= $val;
-    }
-    elsif (ref(\$val) eq 'GLOB') {       # glob
-      $sname = substr($val, 1);
-      $sname = $s->_dump($sname, "");
-      if (!$s->{purity} and $sname =~ /^[\"\']([A-Za-z_][\w:]*)[\"\']$/) {
-	$sname = $1;
+
+    my $ref = \$_[1];
+    # first, catalog the scalar
+    if ($name ne '') {
+      ($id) = ("$ref" =~ /\(([^\(]*)\)$/);
+      if (exists $s->{seen}{$id}) {
+	$out = $s->{seen}{$id}[0];
+	return $out;
       }
       else {
+	$s->{seen}{$id} = ["\\$name", $val];
+      }
+    }
+    if (ref($ref) eq 'GLOB' or "$ref" =~ /=GLOB\([^()]+\)$/) {  # glob
+      my $name = substr($val, 1);
+      if ($name =~ /^[A-Za-z_][\w:]*$/) {
+	$name =~ s/^main::/::/;
+	$sname = $name;
+      }
+      else {
+	$sname = $s->_dump($name, "");
 	$sname = '{' . $sname . '}';
+      }
+      if ($s->{purity}) {
+	my $k;
+	local ($s->{level}) = 0;
+	for $k (qw(SCALAR ARRAY HASH)) {
+	  # _dump can push into @post, so we hold our place using $postlen
+	  my $postlen = scalar @post;
+	  $post[$postlen] = "\*$sname\{$k\} = ";
+	  local ($s->{apad}) = " " x length($post[$postlen]) if $s->{indent} >= 2;
+	  $post[$postlen] .= $s->_dump(*{$name}{$k}, "\*$sname\{$k\}");
+	}
       }
       $out .= '*' . $sname;
     }
-    else {				# string
+    elsif ($val =~ /^-?[1-9]\d{0,8}$/) { # safe decimal number
+      $out .= $val;
+    }
+    else {				 # string
       if ($s->{useqq}) {
 	$out .= qquote($val);
       }
@@ -319,6 +386,9 @@ sub _dump {
     }
   }
 
+  # if we made it this far, $id was added to seen list at current
+  # level, so remove it to get deep copies
+  delete($s->{seen}{$id}) if $id and $s->{deepcopy};
   return $out;
 }
   
@@ -352,11 +422,11 @@ sub Indent {
   my($s, $v) = @_;
   if (defined($v)) {
     if ($v == 0) {
-      $s->{pad} = "";
+      $s->{xpad} = "";
       $s->{sep} = "";
     }
     else {
-      $s->{pad} = "  ";
+      $s->{xpad} = "  ";
       $s->{sep} = "\n";
     }
     $s->{indent} = $v;
@@ -366,12 +436,12 @@ sub Indent {
 
 sub Pad {
   my($s, $v) = @_;
-  defined($v) ? ($s->{xpad} = $v) : $s->{xpad};
+  defined($v) ? ($s->{pad} = $v) : $s->{pad};
 }
 
 sub Varname {
   my($s, $v) = @_;
-  defined($v) ? ($s->{anonpfx} = $v) : $s->{anonpfx};
+  defined($v) ? ($s->{varname} = $v) : $s->{varname};
 }
 
 sub Purity {
@@ -387,6 +457,21 @@ sub Useqq {
 sub Terse {
   my($s, $v) = @_;
   defined($v) ? ($s->{terse} = $v) : $s->{terse};
+}
+
+sub Freezer {
+  my($s, $v) = @_;
+  defined($v) ? ($s->{freezer} = $v) : $s->{freezer};
+}
+
+sub Toaster {
+  my($s, $v) = @_;
+  defined($v) ? ($s->{toaster} = $v) : $s->{toaster};
+}
+
+sub Deepcopy {
+  my($s, $v) = @_;
+  defined($v) ? ($s->{deepcopy} = $v) : $s->{deepcopy};
 }
 
 # put a string value in double quotes
@@ -438,6 +523,7 @@ Data::Dumper - stringified perl data structures, suitable for both printing and 
        ...
     $d->Purity(1);
     $d->Terse(1);
+    $d->Deepcopy(1);
     eval $d->Dump;
 
 
@@ -487,10 +573,17 @@ anonymous array of values to be dumped.  The optional second argument is an
 anonymous array of names for the values.  The names need not have a leading
 C<$> sign, and must be comprised of alphanumeric characters.  You can begin
 a name with a C<*> to specify that the dereferenced type must be dumped
-instead of the reference itself.
+instead of the reference itself, for ARRAY and HASH references.
 
 The prefix specified by C<$Data::Dumper::Varname> will be used with a
 numeric suffix if the name for a value is undefined.
+
+Data::Dumper will catalog all references encountered while dumping the
+values. Cross-references (in the form of names of substructures in perl
+syntax) will be inserted at all possible points, preserving any structural
+interdependencies in the original set of values.  Structure traversal is
+depth-first,  and proceeds in order from the first supplied value to
+the last.
 
 =item I<$OBJ>->Dump  I<or>  I<PACKAGE>->Dump(I<ARRAYREF [>, I<ARRAYREF]>)
 
@@ -513,7 +606,7 @@ above, only about 4 to 5 times faster, since it is written entirely in C.
 Queries or adds to the internal table of already encountered references.
 You must use C<Reset> to explicitly clear the table if needed.  Such
 references are not dumped; instead, their names are inserted wherever they
-are to be dumped subsequently.
+are encountered subsequently.
 
 Expects a anonymous hash of name => value pairs.  Same rules apply for names
 as in C<new>.  If no argument is supplied, will return the "seen" list of
@@ -548,9 +641,8 @@ in an array context.
 =item DumperX(I<LIST>)
 
 Identical to the C<Dumper()> function above, but this calls the XSUB 
-implementation, and is therefore about 3 to 4 times faster.  Only available
-if you were able to compile and install the XSUB extensions in 
-C<Data::Dumper>.
+implementation.  Only available if you were able to compile and install
+the XSUB extensions in C<Data::Dumper>.
 
 =back
 
@@ -614,6 +706,34 @@ atoms/terms rather than statements.  This means that the C<$VAR>I<n> names
 will be avoided where possible, but be advised that such output may not
 always be parseable by C<eval>.
 
+=item $Data::Dumper::Freezer  I<or>  $I<OBJ>->Freezer(I<[NEWVAL]>)
+
+Can be set to a method name, or to an empty string to disable the feature.
+Data::Dumper will invoke that method via the object before attempting to
+stringify it.  This method can alter the contents of the object (if, for
+instance, it contains data allocated from C), and even rebless it in a
+different package.  The client is responsible for making sure the specified
+method can be called via the object, and that the object ends up containing
+only perl data types after the method has been called.  Defaults to an empty
+string.
+
+=item $Data::Dumper::Toaster  I<or>  $I<OBJ>->Toaster(I<[NEWVAL]>)
+
+Can be set to a method name, or to an empty string to disable the feature.
+Data::Dumper will emit a method call for any objects that are to be dumped
+using the syntax C<bless(DATA, CLASS)->METHOD()>.  Note that this means that
+the method specified will have to perform any modifications required on the
+object (like creating new state within it, and/or reblessing it in a
+different package) and then return it.  The client is responsible for making
+sure the method can be called via the object, and that it returns a valid
+object.  Defaults to an empty string.
+
+=item $Data::Dumper::Deepcopy  I<or>  $I<OBJ>->Deepcopy(I<[NEWVAL]>)
+
+Can be set to a boolean value to enable deep copies of structures.
+Cross-referencing will then only be done when absolutely essential
+(i.e., to break reference cycles).  Default is 0.
+
 =back
 
 =head2 Exports
@@ -623,12 +743,19 @@ always be parseable by C<eval>.
 
 =head1 EXAMPLE
 
+Run these code snippets to get a quick feel for the behavior of this
+module.  When you are through with these examples, you may want to
+add or change the various configuration variables described above,
+to see their behavior.  (See the testsuite in the Data::Dumper
+distribution for more examples.)
+
+
     use Data::Dumper;
 
     package Foo;
     sub new {bless {'a' => 1, 'b' => sub { return "foo" }}, $_[0]};
 
-    package Fuz;                       # a wierd REF-REF-SCALAR object
+    package Fuz;                       # a weird REF-REF-SCALAR object
     sub new {bless \($_ = \ 'fu\'z'), $_[0]};
 
     package main;
@@ -637,9 +764,15 @@ always be parseable by C<eval>.
     $boo = [ 1, [], "abcd", \*foo,
              {1 => 'a', 023 => 'b', 0x45 => 'c'}, 
              \\"p\q\'r", $foo, $fuz];
+    
+    ########
+    # simple usage
+    ########
+
     $bar = eval(Dumper($boo));
     print($@) if $@;
     print Dumper($boo), Dumper($bar);  # pretty print (no array indices)
+
     $Data::Dumper::Terse = 1;          # don't output names where feasible
     $Data::Dumper::Indent = 0;         # turn off all pretty print
     print Dumper($boo), "\n";
@@ -650,7 +783,15 @@ always be parseable by C<eval>.
     $Data::Dumper::Indent = 3;         # pretty print with array indices
     print Dumper($boo);
 
-    # recursive structure
+    $Data::Dumper::Useqq = 1;          # print strings in double quotes
+    print Dumper($boo);
+    
+    
+    ########
+    # recursive structures
+    ########
+    
+    
     @c = ('c');
     $c = \@c;
     $b = {};
@@ -659,18 +800,67 @@ always be parseable by C<eval>.
     $b->{b} = $a->[1];
     $b->{c} = $a->[2];
     print Data::Dumper->Dump([$a,$b,$c], [qw(a b c)]);
-
+    
+    
     $Data::Dumper::Purity = 1;         # fill in the holes for eval
     print Data::Dumper->Dump([$a, $b], [qw(*a b)]); # print as @a
     print Data::Dumper->Dump([$b, $a], [qw(*b a)]); # print as %b
-
-    $d = Data::Dumper->new([$a,$b], [qw(a b)]);     # go OO
+    
+    
+    $Data::Dumper::Deepcopy = 1;       # avoid cross-refs
+    print Data::Dumper->Dump([$b, $a], [qw(*b a)]);
+    
+    
+    $Data::Dumper::Purity = 0;         # avoid cross-refs
+    print Data::Dumper->Dump([$b, $a], [qw(*b a)]);
+    
+    
+    ########
+    # object-oriented usage
+    ########
+    
+    
+    $d = Data::Dumper->new([$a,$b], [qw(a b)]);
     $d->Seen({'*c' => $c});            # stash a ref without printing it
     $d->Indent(3);
     print $d->Dump;
     $d->Reset;                         # empty the seen cache
     $d->Purity(0);
     print join "----\n", $d->Dump;
+    
+    
+    ########
+    # persistence
+    ########
+    
+    
+    package Foo;
+    sub new { bless { state => 'awake' }, shift }
+    sub Freeze {
+        my $s = shift;
+	print STDERR "preparing to sleep\n";
+	$s->{state} = 'asleep';
+	return bless $s, 'Foo::ZZZ';
+    }
+    
+    package Foo::ZZZ;
+    sub Thaw {
+        my $s = shift;
+	print STDERR "waking up\n";
+	$s->{state} = 'awake';
+	return bless $s, 'Foo';
+    }
+    
+    package Foo;
+    use Data::Dumper;
+    my $a = Foo->new;
+    my $b = Data::Dumper->new([$a], ['c']);
+    $b->Freezer('Freeze');
+    $b->Toaster('Thaw');
+    my $c = $b->Dump;
+    print $c;
+    my $d = eval $c;
+    print Data::Dumper->Dump([$d], ['d']);
 
 
 =head1 BUGS
@@ -696,21 +886,21 @@ in curlies; and indentation does not take into account any leading C<$VAR>I<n>
 string; the C<Useqq> flag is not honored by C<Dumpxs()> (it always outputs 
 strings in single quotes).
 
-SCALAR objects have the wierdest looking C<bless> workaround.
+SCALAR objects have the weirdest looking C<bless> workaround.
 
 
 =head1 AUTHOR
 
 Gurusamy Sarathy        gsar@umich.edu
 
-Copyright (c) 1995 Gurusamy Sarathy. All rights reserved.
+Copyright (c) 1996 Gurusamy Sarathy. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
 =head1 VERSION
 
-Version 2.04beta    28 August 1996
+Version 2.05    (2 December 1996)
 
 
 =head1 SEE ALSO

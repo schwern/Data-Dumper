@@ -8,12 +8,17 @@ extern "C" {
 }
 #endif
 
+static SV	*freezer;
+static SV	*toaster;
+static I32	deepcopy;
+static I32	purity;
+
 static I32 num_q _((char *s));
 static I32 esc_q _((char *dest, char *src, STRLEN slen));
 static SV *sv_x _((char *str, STRLEN len, I32 n));
 static I32 DD_dump _((SV *val, char *name, STRLEN namelen, SV *retval,
 		      HV *seenhv, AV *postav, I32 *levelp, I32 indent,
-		      SV *xpad, SV *pad, SV *apad, SV *sep, I32 purity));
+		      SV *pad, SV *xpad, SV *apad, SV *sep));
 
 /* count the number of "'"s and "\"s in string */
 static I32
@@ -78,13 +83,13 @@ I32 n;
 }
 
 /*
- * This ought to split into smaller functions. (it is one long function since
+ * This ought to be split into smaller functions. (it is one long function since
  * it exactly parallels the perl version, which was one long thing for
- * efficiency raisins.
+ * efficiency raisins.)  Ugggh!
  */
 static I32
 DD_dump(val, name, namelen, retval, seenhv, postav,
-	levelp, indent, xpad, pad, apad, sep, purity)
+	levelp, indent, pad, xpad, apad, sep)
 SV	*val;
 char	*name;
 STRLEN	namelen;
@@ -93,22 +98,22 @@ HV	*seenhv;
 AV	*postav;
 I32	*levelp;
 I32	indent;
-SV	*xpad;
 SV	*pad;
+SV	*xpad;
 SV	*apad;
 SV	*sep;
-I32	purity;
 {
     char tmpbuf[128];
     U32 i;
-    char *c, *r, *realpack, *id = tmpbuf;
+    char *c, *r, *realpack, id[128];
     SV **svp;
     SV *sv;
     SV *blesspad = Nullsv;
     SV *ipad;
     SV *ival;
+    AV *seenentry;
     char *iname;
-    STRLEN inamelen;
+    STRLEN inamelen, idlen = 0;
     U32 flags;
     U32 realtype;
 
@@ -125,18 +130,31 @@ I32	purity;
 	return 1;
     }
     if (SvROK(val)) {
-	AV *seenentry;
 
+	if (SvOBJECT(SvRV(val)) && freezer && SvPOK(freezer) && SvCUR(freezer)) {
+	    dSP; ENTER; SAVETMPS; PUSHMARK(sp);
+	    XPUSHs(val); PUTBACK;
+	    i = perl_call_method(SvPVX(freezer), G_EVAL|G_SCALAR);
+	    SPAGAIN;
+	    if (SvTRUE(GvSV(errgv)))
+		warn("WARNING(Freezer method call failed): %s", SvPVX(GvSV(errgv)));
+	    else if (i)
+		val = newSVsv(POPs);
+	    PUTBACK; FREETMPS; LEAVE;
+	    if (i)
+		(void)sv_2mortal(val);
+	}
+	
 	ival = SvRV(val);
 	flags = SvFLAGS(ival);
 	realtype = SvTYPE(ival);
-        (void) sprintf(id, "0x%lx", (U32)ival);
-	i = strlen(id);
+        (void) sprintf(id, "0x%lx", (unsigned long)ival);
+	idlen = strlen(id);
 	if (SvOBJECT(ival))
 	    realpack = HvNAME(SvSTASH(ival));
 	else
-	    realpack = (char *)0;
-	if ((svp = hv_fetch(seenhv, id, i, FALSE)) &&
+	    realpack = Nullch;
+	if ((svp = hv_fetch(seenhv, id, idlen, FALSE)) &&
 	    (sv = *svp) && SvROK(sv) &&
 	    (seenentry = (AV*)SvRV(sv))) {
 	    SV *othername;
@@ -149,20 +167,27 @@ I32	purity;
 		    else if (realtype == SVt_PVAV)
 			sv_catpvn(retval, "[]", 2);
 		    else
-			sv_catpvn(retval, "''", 2);      /* wierd mlevel structure */
+			sv_catpvn(retval, "''", 2);
 		    postentry = newSVpv(name, namelen);
 		    sv_catpvn(postentry, " = ", 3);
 		    sv_catsv(postentry, othername);
 		    av_push(postav, postentry);
 		}
 		else {
-		    if (name[0] == '@')
-			sv_catpvn(retval, "@{", 2);
-		    else if(name[0] == '%') 
-			sv_catpvn(retval, "%{", 2);
-		    sv_catsv(retval, othername);
-		    if (name[0] == '@' || name[0] == '%')
-			sv_catpvn(retval, "}", 1);
+		    if (name[0] == '@' || name[0] == '%') {
+			if ((SvPVX(othername))[0] == '\\' &&
+			    (SvPVX(othername))[1] == name[0]) {
+			    sv_catpvn(retval, SvPVX(othername)+1, SvCUR(othername)-1);
+			}
+			else {
+			    sv_catpvn(retval, name, 1);
+			    sv_catpvn(retval, "{", 1);
+			    sv_catsv(retval, othername);
+			    sv_catpvn(retval, "}", 1);
+			}
+		    }
+		    else
+			sv_catsv(retval, othername);
 		}
 		return 1;
 	    }
@@ -188,7 +213,7 @@ I32	purity;
 	}
 	
 	(*levelp)++;
-	ipad = sv_x(SvPVX(pad), SvCUR(pad), *levelp);
+	ipad = sv_x(SvPVX(xpad), SvCUR(xpad), *levelp);
 
 	if (realpack) {   /* we have a blessed ref */
 	    sv_catpvn(retval, "bless( ", 7);
@@ -200,21 +225,17 @@ I32	purity;
 	}
 
 	if (realtype <= SVt_PVBM || realtype == SVt_PVGV) {  /* scalars */
-	    New(0, iname, namelen+2, char);
-	    iname[0] = '$';
-	    (void)strcpy(iname+1, name);
-	    if (realpack) {          /* blessed */ 
+	    if (realpack && realtype != SVt_PVGV) {          /* blessed */ 
 		sv_catpvn(retval, "\\($_ = ", 7);
-		DD_dump(ival, iname, namelen+1, retval, seenhv, postav,
-			levelp,	indent, xpad, pad, apad, sep, purity);
+		DD_dump(ival, "", 0, retval, seenhv, postav,
+			levelp,	indent, pad, xpad, apad, sep);
 		sv_catpvn(retval, ")", 1);
 	    }
 	    else {
 		sv_catpvn(retval, "\\", 1);
-		DD_dump(ival, iname, namelen+1, retval, seenhv, postav,
-			levelp,	indent, xpad, pad, apad, sep, purity);
+		DD_dump(ival, "", 0, retval, seenhv, postav,
+			levelp,	indent, pad, xpad, apad, sep);
 	    }
-	    Safefree(iname);
 	}
 	else if (realtype == SVt_PVAV) {
 	    SV *totpad;
@@ -230,14 +251,22 @@ I32	purity;
 		sv_catpvn(retval, "(", 1);
 		iname[0] = '$';
 	    }
-	    else
+	    else {
 		sv_catpvn(retval, "[", 1);
-	    if (namelen > 0 && name[namelen-1] != ']' && name[namelen-1] != '}') {
+		if (namelen > 0 && name[namelen-1] != ']' && name[namelen-1] != '}') {
+		    iname[inamelen++] = '-'; iname[inamelen++] = '>';
+		    iname[inamelen] = '\0';
+		}
+	    }
+	    if (iname[0] == '*' && iname[inamelen-1] == '}' && inamelen >= 8 &&
+		(instr(iname+inamelen-8, "{SCALAR}") ||
+		 instr(iname+inamelen-7, "{ARRAY}") ||
+		 instr(iname+inamelen-6, "{HASH}"))) {
 		iname[inamelen++] = '-'; iname[inamelen++] = '>';
 	    }
 	    iname[inamelen++] = '['; iname[inamelen] = '\0';
 	    totpad = newSVsv(sep);
-	    sv_catsv(totpad, xpad);
+	    sv_catsv(totpad, pad);
 	    sv_catsv(totpad, apad);
 
 	    for (ix = 0; ix <= ixmax; ++ix) {
@@ -263,12 +292,12 @@ I32	purity;
 		sv_catsv(retval, totpad);
 		sv_catsv(retval, ipad);
 		DD_dump(elem, iname, ilen, retval, seenhv, postav,
-			levelp,	indent, xpad, pad, apad, sep, purity);
+			levelp,	indent, pad, xpad, apad, sep);
 		if (ix < ixmax)
 		    sv_catpvn(retval, ",", 1);
 	    }
 	    if (ixmax >= 0) {
-		SV *opad = sv_x(SvPVX(pad), SvCUR(pad), (*levelp)-1);
+		SV *opad = sv_x(SvPVX(xpad), SvCUR(xpad), (*levelp)-1);
 		sv_catsv(retval, totpad);
 		sv_catsv(retval, opad);
 		SvREFCNT_dec(opad);
@@ -294,14 +323,21 @@ I32	purity;
 		sv_catpvn(retval, "(", 1);
 		(SvPVX(iname))[0] = '$';
 	    }
-	    else
+	    else {
 		sv_catpvn(retval, "{", 1);
-	    if (namelen > 0 && name[namelen-1] != ']' && name[namelen-1] != '}') {
+		if (namelen > 0 && name[namelen-1] != ']' && name[namelen-1] != '}') {
+		    sv_catpvn(iname, "->", 2);
+		}
+	    }
+	    if (name[0] == '*' && name[namelen-1] == '}' && namelen >= 8 &&
+		(instr(name+namelen-8, "{SCALAR}") ||
+		 instr(name+namelen-7, "{ARRAY}") ||
+		 instr(name+namelen-6, "{HASH}"))) {
 		sv_catpvn(iname, "->", 2);
 	    }
 	    sv_catpvn(iname, "{", 1);
 	    totpad = newSVsv(sep);
-	    sv_catsv(totpad, xpad);
+	    sv_catsv(totpad, pad);
 	    sv_catsv(totpad, apad);
 	    
 	    (void)hv_iterinit((HV*)ival);
@@ -349,14 +385,14 @@ I32	purity;
 		    newapad = apad;
 
 		DD_dump(hval, SvPVX(sname), SvCUR(sname), retval, seenhv, postav,
-			levelp,	indent, xpad, pad, newapad, sep, purity);
+			levelp,	indent, pad, xpad, newapad, sep);
 		SvREFCNT_dec(sname);
 		Safefree(nkey);
 		if (indent >= 2)
 		    SvREFCNT_dec(newapad);
 	    }
 	    if (i) {
-		SV *opad = sv_x(SvPVX(pad), SvCUR(pad), *levelp-1);
+		SV *opad = sv_x(SvPVX(xpad), SvCUR(xpad), *levelp-1);
 		sv_catsv(retval, totpad);
 		sv_catsv(retval, opad);
 		SvREFCNT_dec(opad);
@@ -369,14 +405,9 @@ I32	purity;
 	    SvREFCNT_dec(totpad);
 	}
 	else if (realtype == SVt_PVCV) {
-            STRLEN len;
-	    (void) sprintf(tmpbuf, "sub { 'CODE(0x%lx)' }", (U32)ival);
-            len = strlen(tmpbuf);
-	    sv_catpvn(retval, tmpbuf, len);
+	    sv_catpvn(retval, "sub { \"DUMMY\" }", 15);
 	    if (purity)
-		warn("encountered CODE ref, using dummy placeholder");
-	}
-	else if (realtype == SVt_PVGV) {
+		warn("Encountered CODE ref, using dummy placeholder");
 	}
 	else {
 	    warn("cannot handle ref type %ld", realtype);
@@ -390,13 +421,41 @@ I32	purity;
 	    sv_catpvn(retval, ", '", 3);
 	    sv_catpvn(retval, realpack, strlen(realpack));
 	    sv_catpvn(retval, "' )", 3);
+	    if (toaster && SvPOK(toaster) && SvCUR(toaster)) {
+		sv_catpvn(retval, "->", 2);
+		sv_catsv(retval, toaster);
+		sv_catpvn(retval, "()", 2);
+	    }
 	}
 	SvREFCNT_dec(ipad);
 	(*levelp)--;
-	return 1;
     }
     else {
 	STRLEN i;
+	
+	if (namelen) {
+	    (void) sprintf(id, "0x%lx", (unsigned long)val);
+	    if ((svp = hv_fetch(seenhv, id, (idlen = strlen(id)), FALSE)) &&
+		(sv = *svp) && SvROK(sv) &&
+		(seenentry = (AV*)SvRV(sv))) {
+		SV *othername;
+		if ((svp = av_fetch(seenentry, 0, FALSE)) && (othername = *svp)) {
+		    sv_catsv(retval, othername);
+		    return 1;
+		}
+	    }
+	    else {
+		SV *namesv;
+		namesv = newSVpv("\\", 1);
+		sv_catpvn(namesv, name, namelen);
+		seenentry = newAV();
+		av_push(seenentry, namesv);
+		(void)SvREFCNT_inc(val);
+		av_push(seenentry, val);
+		(void)hv_store(seenhv, id, strlen(id), newRV((SV*)seenentry), 0);
+		SvREFCNT_dec(seenentry);
+	    }
+	}
 	
 	if (SvIOK(val)) {
             STRLEN len;
@@ -406,35 +465,81 @@ I32	purity;
 	    sv_catpvn(retval, tmpbuf, len);
 	    return 1;
 	}
-	else if (SvOK(val)) {
-	    if (realtype == SVt_PVGV) { /* GLOBs can end up with scribbly names */
-		c = SvPV(val, i);
-		++c; --i;		/* just get the name */
-		sv_grow(retval, SvCUR(retval)+5+2*i);
-		r = SvPVX(retval)+SvCUR(retval);
-		r[0] = '*'; r[1] = '{';	r[2] = '\'';
-		i += esc_q(r+3, c, i);
-		i += 3;
-		r[i++] = '\''; r[i++] = '}';
-		r[i] = '\0';
+	else if (realtype == SVt_PVGV) { /* GLOBs can end up with scribbly names */
+	    c = SvPV(val, i);
+	    ++c; --i;		/* just get the name */
+	    sv_grow(retval, SvCUR(retval)+5+2*i);
+	    r = SvPVX(retval)+SvCUR(retval);
+	    r[0] = '*'; r[1] = '{';	r[2] = '\'';
+	    i += esc_q(r+3, c, i);
+	    i += 3;
+	    r[i++] = '\''; r[i++] = '}';
+	    r[i] = '\0';
+
+	    if (purity) {
+		static char *entries[] = { "{SCALAR}", "{ARRAY}", "{HASH}" };
+		static STRLEN sizes[] = { 8, 7, 6 };
+		SV *e;
+		SV *nname = newSVpv("", 0);
+		SV *newapad;
+		GV *gv = (GV*)val;
+		I32 j;
+		
+		if (indent >= 2)
+		    newapad = newSVsv(apad);
+		
+		for (j=0; j<3; j++) {
+		    I32 nlevel = 0;
+		    SV *postentry = newSVpv(r,i);
+		    
+		    sv_catpvn(postentry, entries[j], sizes[j]);
+		    sv_setsv(nname, postentry);
+		    sv_catpvn(postentry, " = ", 3);
+		    av_push(postav, postentry);
+		    e = ((j == 0) ? GvSV(gv) : (j == 1) ? (SV*)GvAV(gv) : (SV*)GvHV(gv));
+		    e = newRV(e);
+		    
+		    if (indent >= 2) {
+			char *extra;
+			I32 elen = 0;
+			sv_setsv(newapad, apad);
+			New(0, extra, SvCUR(postentry)+1, char);
+			while (elen < SvCUR(postentry))
+			    extra[elen++] = ' ';
+			extra[elen] = '\0';
+			sv_catpvn(newapad, extra, elen);
+			Safefree(extra);
+		    }
+		    else			
+			newapad = apad;
+
+		    DD_dump(e, SvPVX(nname), SvCUR(nname), postentry, seenhv, postav,
+			    &nlevel, indent, pad, xpad, newapad, sep);
+		    SvREFCNT_dec(e);
+		}
+		
+		if (indent >= 2)
+		    SvREFCNT_dec(newapad);
+		SvREFCNT_dec(nname);
 	    }
-	    else {
-		c = SvPV(val, i);
-		sv_grow(retval, SvCUR(retval)+3+2*i);
-		r = SvPVX(retval)+SvCUR(retval);
-		r[0] = '\'';
-		i += esc_q(r+1, c, i);
-		++i;
-		r[i++] = '\'';
-		r[i] = '\0';
-	    }
-	    SvCUR_set(retval, SvCUR(retval)+i);
-	    return 1;
 	}
 	else {
-	    return 0;
+	    c = SvPV_force(val, i);
+	    sv_grow(retval, SvCUR(retval)+3+2*i);
+	    r = SvPVX(retval)+SvCUR(retval);
+	    r[0] = '\'';
+	    i += esc_q(r+1, c, i);
+	    ++i;
+	    r[i++] = '\'';
+	    r[i] = '\0';
 	}
+	SvCUR_set(retval, SvCUR(retval)+i);
     }
+
+    if (deepcopy && idlen)
+	(void)hv_delete(seenhv, id, idlen, G_DISCARD);
+	
+    return 1;
 }
 
 
@@ -462,9 +567,9 @@ Data_Dumper_Dumpxs(href, ...)
 	    HV *seenhv = Nullhv;
 	    AV *postav, *todumpav, *namesav;
 	    I32 level = 0;
-	    I32 indent, terse, useqq, purity, i, imax, postlen;
+	    I32 indent, terse, useqq, i, imax, postlen;
 	    SV **svp;
-	    SV *val, *name, *xpad, *pad, *apad, *sep, *tmp, *anonpfx;
+	    SV *val, *name, *pad, *xpad, *apad, *sep, *tmp, *varname;
 	    char tmpbuf[1024];
 	    I32 gimme = GIMME;
 
@@ -495,14 +600,17 @@ Data_Dumper_Dumpxs(href, ...)
 		PUTBACK;
 		FREETMPS;
 		LEAVE;
-		(void)sv_2mortal(href);
+		if (i)
+		    (void)sv_2mortal(href);
 	    }
 
 	    todumpav = namesav = Nullav;
 	    seenhv = Nullhv;
-	    val = name = xpad = pad = apad = sep = tmp = anonpfx = &sv_undef;
+	    val = pad = xpad = apad = sep = tmp = varname
+		= freezer = toaster = &sv_undef;
+	    name = sv_newmortal();
 	    indent = 2;
-	    terse = useqq = purity = 0;
+	    terse = useqq = purity = deepcopy = 0;
 	    
 	    retval = newSVpv("", 0);
 	    if (SvROK(href)
@@ -523,16 +631,22 @@ Data_Dumper_Dumpxs(href, ...)
 		    terse = SvIV(*svp);
 		if ((svp = hv_fetch(hv, "useqq", 5, FALSE)))
 		    useqq = SvIV(*svp);
-		if ((svp = hv_fetch(hv, "xpad", 4, FALSE)))
-		    xpad = *svp;
 		if ((svp = hv_fetch(hv, "pad", 3, FALSE)))
 		    pad = *svp;
+		if ((svp = hv_fetch(hv, "xpad", 4, FALSE)))
+		    xpad = *svp;
 		if ((svp = hv_fetch(hv, "apad", 4, FALSE)))
 		    apad = *svp;
 		if ((svp = hv_fetch(hv, "sep", 3, FALSE)))
 		    sep = *svp;
-		if ((svp = hv_fetch(hv, "anonpfx", 7, FALSE)))
-		    anonpfx = *svp;
+		if ((svp = hv_fetch(hv, "varname", 7, FALSE)))
+		    varname = *svp;
+		if ((svp = hv_fetch(hv, "freezer", 7, FALSE)))
+		    freezer = *svp;
+		if ((svp = hv_fetch(hv, "toaster", 7, FALSE)))
+		    toaster = *svp;
+		if ((svp = hv_fetch(hv, "deepcopy", 8, FALSE)))
+		    deepcopy = SvTRUE(*svp);
 		postav = newAV();
 
 		if (todumpav)
@@ -547,9 +661,9 @@ Data_Dumper_Dumpxs(href, ...)
 		    else
 			val = &sv_undef;
 		    if ((svp = av_fetch(namesav, i, TRUE)))
-			name = *svp;
+			sv_setsv(name, *svp);
 		    else
-			name = &sv_undef;
+			SvOK_off(name);
 		    
 		    if (SvOK(name)) {
 			if ((SvPVX(name))[0] == '*') {
@@ -575,17 +689,17 @@ Data_Dumper_Dumpxs(href, ...)
 		    else {
 			STRLEN nchars = 0;
 			sv_setpvn(name, "$", 1);
-			sv_catsv(name, anonpfx);
+			sv_catsv(name, varname);
 			(void) sprintf(tmpbuf, "%ld", i+1);
 			nchars = strlen(tmpbuf);
 			sv_catpvn(name, tmpbuf, nchars);
 		    }
 		    
 		    DD_dump(val, SvPVX(name), SvCUR(name), valstr, seenhv, postav,
-			    &level, indent, xpad, pad, apad, sep, purity);
+			    &level, indent, pad, xpad, apad, sep);
 		    postlen = av_len(postav);
 		    if (terse && postlen < 0) {
-			sv_catsv(retval, xpad);
+			sv_catsv(retval, pad);
 			sv_catsv(retval, valstr);
 			sv_catsv(retval, sep);
 		    }
@@ -593,7 +707,7 @@ Data_Dumper_Dumpxs(href, ...)
 			/* XXX need to implement this */
 			/*if (indent >= 2)
 			    apad = sv_x(" ", 1, SvCUR(name)+3); */
-			sv_catsv(retval, xpad);
+			sv_catsv(retval, pad);
 			sv_catsv(retval, name);
 			sv_catpvn(retval, " = ", 3);
 			sv_catsv(retval, valstr);
@@ -601,7 +715,7 @@ Data_Dumper_Dumpxs(href, ...)
 			sv_catsv(retval, sep);
 			if (postlen >= 0) {
 			    I32 i;
-			    sv_catsv(retval, xpad);
+			    sv_catsv(retval, pad);
 			    for (i = 0; i <= postlen; ++i) {
 				SV *elem;
 				svp = av_fetch(postav, i, FALSE);
@@ -610,7 +724,7 @@ Data_Dumper_Dumpxs(href, ...)
 				    if (i < postlen) {
 					sv_catpvn(retval, ";", 1);
 					sv_catsv(retval, sep);
-					sv_catsv(retval, xpad);
+					sv_catsv(retval, pad);
 				    }
 				}
 			    }

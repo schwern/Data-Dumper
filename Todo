@@ -8,16 +8,6 @@ The following functionality will be supported in the next few releases.
 
 =over 4
 
-=item $Data::Dumper::Freezer  I<or>  $I<OBJ>->Freezer(I<[NEWVAL]>)
-
-Can be set to the method name that you want Dumper to call before attempting
-to stringify an object.  This method can alter the contents of the object
-(if, for instance, it contains data allocated from C), and even rebless it
-in a different package.  The client is responsible for making sure the
-specified method can be called via the object, and that the object ends up
-containing only perl data types after the method has been called.
-(This will be added when 5.004, which has UNIVERSAL::isa, is released.)
-
 =item $Data::Dumper::Maxdepth I<or> $I<OBJ>->Maxdepth(I<NEWVAL>)
 
 Depth beyond which we don't venture into a structure.  Has no effect when
@@ -29,8 +19,6 @@ want to see more than enough).
 Dump contents explicitly up to a certain depth and then use names for
 cross-referencing identical references.  (useful in debugger, in situations
 where we don't care so much for cross-references).
-
-=item Dumping contents of typeglobs
 
 
 =back

@@ -6,6 +6,35 @@ HISTORY - public release history for Data::Dumper
 
 =over 8
 
+=item 2.05  (2 December 1996)
+
+Fixed the type mismatch that was causing Dumpxs test to fail
+on 64-bit platforms.
+
+GLOB elements are dumped now when C<Purity> is set (using the
+*GLOB{THING} syntax).
+
+The C<Freezer> option can be set to a method name to call
+before probing objects for dumping.  Some applications: objects with
+external data, can re-bless themselves into a transitional package;
+Objects the maintain ephemeral state (like open files) can put
+additional information in the object to facilitate persistence.
+
+The corresponding C<Toaster> option, if set, specifies
+the method call that will revive the frozen object.
+
+The C<Deepcopy> flag has been added to do just that.
+
+Dumper does more aggressive cataloging of SCALARs encountered
+within ARRAY/HASH structures.
+
+Objects that C<overload> the '""' operator are now handled
+properly by the C<Dump> method.
+
+Significant additions to the testsuite.
+
+More documentation.
+
 =item 2.04beta  (28 August 1996)
 
 Made dump of glob names respect C<Useqq> setting.
