@@ -5,25 +5,36 @@
 
 use Data::Dumper;
 
+$Data::Dumper::Pad = "#";
 my $TMAX;
 my $XS;
 my $TNUM = 0;
-my $want = '';
+my $WANT = '';
 
 sub TEST {
-  my $t = join '', @_;
+  my $string = shift;
+  my $t = eval $string;
   ++$TNUM;
-  print $t eq $want ? "ok $TNUM\n"
-	: "not ok $TNUM\n--Expected--\n$want\n--Got--\n$t\n";
+  print( ($t eq $WANT and not $@) ? "ok $TNUM\n"
+	: "not ok $TNUM\n--Expected--\n$WANT\n--Got--\n$@$t\n");
+
+  ++$TNUM;
+  eval "$t";
+  print $@ ? "not ok $TNUM\n# \$@ says: $@\n" : "ok $TNUM\n";
+
+  $t = eval $string;
+  ++$TNUM;
+  print( ($t eq $WANT and not $@) ? "ok $TNUM\n"
+	: "not ok $TNUM\n--Expected--\n$WANT\n--Got--\n$@$t\n");
 }
 
 if (defined &Data::Dumper::Dumpxs) {
   print "### XS extension loaded, will run XS tests\n";
-  $TMAX = 40; $XS = 1;
+  $TMAX = 120; $XS = 1;
 }
 else {
   print "### XS extensions not loaded, will NOT run XS tests\n";
-  $TMAX = 20; $XS = 0;
+  $TMAX = 60; $XS = 0;
 }
 
 print "1..$TMAX\n";
@@ -39,178 +50,207 @@ $b->{a} = $a;
 $b->{b} = $a->[1];
 $b->{c} = $a->[2];
 
-#############
+############# 1
 ##
-$want = <<'EOT';
-$a = [
-       1,
-       {
-         a => $a,
-         b => $a->[1],
-         c => [
-                'c'
-              ]
-       },
-       $a->[1]{c}
-     ];
-$b = $a->[1];
-$c = $a->[1]{c};
+$WANT = <<'EOT';
+#$a = [
+#       1,
+#       {
+#         a => $a,
+#         b => $a->[1],
+#         c => [
+#                'c'
+#              ]
+#       },
+#       $a->[1]{c}
+#     ];
+#$b = $a->[1];
+#$c = $a->[1]{c};
 EOT
 
-TEST(Data::Dumper->Dump([$a,$b,$c], [qw(a b c)]));
+TEST q(Data::Dumper->Dump([$a,$b,$c], [qw(a b c)]));
+TEST q(Data::Dumper->Dumpxs([$a,$b,$c], [qw(a b c)])) if $XS;
 
 
-#############
+############# 7
 ##
-$want = <<'EOT';
-@a = (
-       1,
-       {
-         'a' => [],
-         'b' => {},
-         'c' => [
-                  'c'
-                ]
-       },
-       []
-     );
-$a[1]{'a'} = \@a;
-$a[1]{'b'} = $a[1];
-$a[2] = $a[1]{'c'};
-$b = $a[1];
+$WANT = <<'EOT';
+#@a = (
+#       1,
+#       {
+#         'a' => [],
+#         'b' => {},
+#         'c' => [
+#                  'c'
+#                ]
+#       },
+#       []
+#     );
+#$a[1]{'a'} = \@a;
+#$a[1]{'b'} = $a[1];
+#$a[2] = $a[1]{'c'};
+#$b = $a[1];
 EOT
 
 $Data::Dumper::Purity = 1;         # fill in the holes for eval
-TEST(Data::Dumper->Dump([$a, $b], [qw(*a b)])); # print as @a
+TEST q(Data::Dumper->Dump([$a, $b], [qw(*a b)])); # print as @a
+TEST q(Data::Dumper->Dumpxs([$a, $b], [qw(*a b)])) if $XS;
 
-#############
+############# 13
 ##
-$want = <<'EOT';
-%b = (
-       'a' => [
-                1,
-                {},
-                [
-                  'c'
-                ]
-              ],
-       'b' => {},
-       'c' => []
-     );
-$b{'a'}[1] = \%b;
-$b{'b'} = \%b;
-$b{'c'} = $b{'a'}[2];
-$a = $b{'a'};
+$WANT = <<'EOT';
+#%b = (
+#       'a' => [
+#                1,
+#                {},
+#                [
+#                  'c'
+#                ]
+#              ],
+#       'b' => {},
+#       'c' => []
+#     );
+#$b{'a'}[1] = \%b;
+#$b{'b'} = \%b;
+#$b{'c'} = $b{'a'}[2];
+#$a = $b{'a'};
 EOT
 
-TEST(Data::Dumper->Dump([$b, $a], [qw(*b a)])); # print as %b
+TEST q(Data::Dumper->Dump([$b, $a], [qw(*b a)])); # print as %b
+TEST q(Data::Dumper->Dumpxs([$b, $a], [qw(*b a)])) if $XS;
 
-#############
+############# 19
 ##
-$want = <<'EOT';
-$a = [
-  1,
-  {
-    'a' => [],
-    'b' => {},
-    'c' => []
-  },
-  []
-];
-$a->[1]{'a'} = $a;
-$a->[1]{'b'} = $a->[1];
-$a->[1]{'c'} = \@c;
-$a->[2] = \@c;
-$b = $a->[1];
+$WANT = <<'EOT';
+#$a = [
+#  1,
+#  {
+#    'a' => [],
+#    'b' => {},
+#    'c' => []
+#  },
+#  []
+#];
+#$a->[1]{'a'} = $a;
+#$a->[1]{'b'} = $a->[1];
+#$a->[1]{'c'} = \@c;
+#$a->[2] = \@c;
+#$b = $a->[1];
 EOT
 
 $Data::Dumper::Indent = 1;
-$d = Data::Dumper->new([$a,$b], [qw(a b)]);     # go OO
-$d->Seen({'*c' => $c});            # stash a ref without printing it
-TEST($d->Dump);
+TEST q(
+       $d = Data::Dumper->new([$a,$b], [qw(a b)]);
+       $d->Seen({'*c' => $c});
+       $d->Dump;
+      );
+if ($XS) {
+  TEST q(
+	 $d = Data::Dumper->new([$a,$b], [qw(a b)]);
+	 $d->Seen({'*c' => $c});
+	 $d->Dumpxs;
+	);
+}
 
-#############
+
+############# 25
 ##
-$want = <<'EOT';
-$a = [
-       #0
-       1,
-       #1
-       {
-         a => $a,
-         b => $a->[1],
-         c => [
-                #0
-                'c'
-              ]
-       },
-       #2
-       $a->[1]{c}
-     ];
-$b = $a->[1];
+$WANT = <<'EOT';
+#$a = [
+#       #0
+#       1,
+#       #1
+#       {
+#         a => $a,
+#         b => $a->[1],
+#         c => [
+#                #0
+#                'c'
+#              ]
+#       },
+#       #2
+#       $a->[1]{c}
+#     ];
+#$b = $a->[1];
 EOT
 
 $d->Indent(3);
-$d->Reset;                         # empty the seen cache
 $d->Purity(0);
-TEST($d->Dump);
+TEST q( $d->Reset; $d->Dump );
 
-#############
+TEST q( $d->Reset; $d->Dumpxs ) if $XS;
+
+############# 31
 ##
-$want = <<'EOT';
-$VAR1 = [
-  1,
-  {
-    'a' => [],
-    'b' => {},
-    'c' => [
-      'c'
-    ]
-  },
-  []
-];
-$VAR1->[1]{'a'} = $VAR1;
-$VAR1->[1]{'b'} = $VAR1->[1];
-$VAR1->[2] = $VAR1->[1]{'c'};
+$WANT = <<'EOT';
+#$VAR1 = [
+#  1,
+#  {
+#    'a' => [],
+#    'b' => {},
+#    'c' => [
+#      'c'
+#    ]
+#  },
+#  []
+#];
+#$VAR1->[1]{'a'} = $VAR1;
+#$VAR1->[1]{'b'} = $VAR1->[1];
+#$VAR1->[2] = $VAR1->[1]{'c'};
 EOT
 
-TEST(Dumper($a));
+TEST q(Dumper($a));
+TEST q(Data::Dumper::DumperX($a)) if $XS;
 
-#############
+############# 37
 ##
-$want = <<'EOT';
-[
-  1,
-  {
-    a => $VAR1,
-    b => $VAR1->[1],
-    c => [
-      'c'
-    ]
-  },
-  $VAR1->[1]{c}
-]
+$WANT = <<'EOT';
+#[
+#  1,
+#  {
+#    a => $VAR1,
+#    b => $VAR1->[1],
+#    c => [
+#      'c'
+#    ]
+#  },
+#  $VAR1->[1]{c}
+#]
 EOT
 
 {
   local $Data::Dumper::Purity = 0;
   local $Data::Dumper::Terse = 1;
-  TEST(Dumper($a));
+  TEST q(Dumper($a));
+  TEST q(Data::Dumper::DumperX($a)) if $XS;
 }
 
-#############
+
+############# 43
 ##
-$want = <<'EOT';
-$VAR1 = {
-  "abc\000\efg" => "mno\000"
-};
+$WANT = <<'EOT';
+#$VAR1 = {
+#  "abc\000\efg" => "mno\000"
+#};
 EOT
 
 $foo = { "abc\000\efg" => "mno\000" };
 {
   local $Data::Dumper::Useqq = 1;
-  TEST(Dumper($foo));
+  TEST q(Dumper($foo));
 }
+
+  $WANT = <<"EOT";
+#\$VAR1 = {
+#  'abc\000\efg' => 'mno\000'
+#};
+EOT
+
+  {
+    local $Data::Dumper::Useqq = 1;
+    TEST q(Data::Dumper::DumperX($foo)) if $XS;   # cheat
+  }
+
 
 
 #############
@@ -225,595 +265,160 @@ $foo = { "abc\000\efg" => "mno\000" };
   $foo{d} = \%foo;
   $foo[2] = \%foo;
 
-#############
+############# 49
 ##
-  $want = <<'EOT';
-$foo = \*::foo;
-*::foo{SCALAR} = \5;
-*::foo{ARRAY} = [
-  10,
-  '',
-  {
-    'a' => 1,
-    'b' => '',
-    'c' => [],
-    'd' => {}
-  }
-];
-*::foo{ARRAY}->[1] = $foo;
-*::foo{ARRAY}->[2]{'b'} = *::foo{SCALAR};
-*::foo{ARRAY}->[2]{'c'} = *::foo{ARRAY};
-*::foo{ARRAY}->[2]{'d'} = *::foo{ARRAY}->[2];
-*::foo{HASH} = *::foo{ARRAY}->[2];
-@bar = @{*::foo{ARRAY}};
-%baz = %{*::foo{ARRAY}->[2]};
+  $WANT = <<'EOT';
+#$foo = \*::foo;
+#*::foo = \5;
+#*::foo = [
+#           #0
+#           10,
+#           #1
+#           '',
+#           #2
+#           {
+#             'a' => 1,
+#             'b' => '',
+#             'c' => [],
+#             'd' => {}
+#           }
+#         ];
+#*::foo{ARRAY}->[1] = $foo;
+#*::foo{ARRAY}->[2]{'b'} = *::foo{SCALAR};
+#*::foo{ARRAY}->[2]{'c'} = *::foo{ARRAY};
+#*::foo{ARRAY}->[2]{'d'} = *::foo{ARRAY}->[2];
+#*::foo = *::foo{ARRAY}->[2];
+#@bar = @{*::foo{ARRAY}};
+#%baz = %{*::foo{ARRAY}->[2]};
 EOT
 
   $Data::Dumper::Purity = 1;
-  TEST(Data::Dumper->Dump([\*foo, \@foo, \%foo], ['*foo', '*bar', '*baz']));
+  $Data::Dumper::Indent = 3;
+  TEST q(Data::Dumper->Dump([\\*foo, \\@foo, \\%foo], ['*foo', '*bar', '*baz']));
+  TEST q(Data::Dumper->Dumpxs([\\*foo, \\@foo, \\%foo], ['*foo', '*bar', '*baz'])) if $XS;
 
-#############
+############# 55
 ##
-  $want = <<'EOT';
-$foo = \*::foo;
-*::foo{SCALAR} = \5;
-*::foo{ARRAY} = [
-  10,
-  '',
-  {
-    'a' => 1,
-    'b' => '',
-    'c' => [],
-    'd' => {}
-  }
-];
-*::foo{ARRAY}->[1] = $foo;
-*::foo{ARRAY}->[2]{'b'} = *::foo{SCALAR};
-*::foo{ARRAY}->[2]{'c'} = *::foo{ARRAY};
-*::foo{ARRAY}->[2]{'d'} = *::foo{ARRAY}->[2];
-*::foo{HASH} = *::foo{ARRAY}->[2];
-$bar = *::foo{ARRAY};
-$baz = *::foo{ARRAY}->[2];
-EOT
-
-  TEST(Data::Dumper->Dump([\*foo, \@foo, \%foo], ['foo', 'bar', 'baz']));
-
-#############
-##
-  $want = <<'EOT';
-@bar = (
-  10,
-  \*::foo,
-  {}
-);
-*::foo{SCALAR} = \5;
-*::foo{ARRAY} = \@bar;
-*::foo{HASH} = {
-  'a' => 1,
-  'b' => '',
-  'c' => [],
-  'd' => {}
-};
-*::foo{HASH}->{'b'} = *::foo{SCALAR};
-*::foo{HASH}->{'c'} = \@bar;
-*::foo{HASH}->{'d'} = *::foo{HASH};
-$bar[2] = *::foo{HASH};
-%baz = %{*::foo{HASH}};
-$foo = $bar[1];
-EOT
-
-  TEST(Data::Dumper->Dump([\@foo, \%foo, \*foo], ['*bar', '*baz', '*foo']));
-
-#############
-##
-  $want = <<'EOT';
-$bar = [
-  10,
-  \*::foo,
-  {}
-];
-*::foo{SCALAR} = \5;
-*::foo{ARRAY} = $bar;
-*::foo{HASH} = {
-  'a' => 1,
-  'b' => '',
-  'c' => [],
-  'd' => {}
-};
-*::foo{HASH}->{'b'} = *::foo{SCALAR};
-*::foo{HASH}->{'c'} = $bar;
-*::foo{HASH}->{'d'} = *::foo{HASH};
-$bar->[2] = *::foo{HASH};
-$baz = *::foo{HASH};
-$foo = $bar->[1];
-EOT
-
-  TEST(Data::Dumper->Dump([\@foo, \%foo, \*foo], ['bar', 'baz', 'foo']));
-
-#############
-##
-  $want = <<'EOT';
-$foo = \*::foo;
-@bar = (
-  10,
-  $foo,
-  {
-    a => 1,
-    b => \5,
-    c => \@bar,
-    d => $bar[2]
-  }
-);
-%baz = %{$bar[2]};
-EOT
-
-  $Data::Dumper::Purity = 0;
-  TEST(Data::Dumper->Dump([\*foo, \@foo, \%foo], ['*foo', '*bar', '*baz']));
-
-#############
-##
-  $want = <<'EOT';
-$foo = \*::foo;
-$bar = [
-  10,
-  $foo,
-  {
-    a => 1,
-    b => \5,
-    c => $bar,
-    d => $bar->[2]
-  }
-];
-$baz = $bar->[2];
-EOT
-
-  TEST(Data::Dumper->Dump([\*foo, \@foo, \%foo], ['foo', 'bar', 'baz']));
-
-}
-
-#############
-#############
-{
-  package main;
-  my @dogs = ( 'Fido', 'Wags' );
-  my %kennel = (
-  	    First => \$dogs[0],
-  	    Second =>  \$dogs[1],
-  	   );
-  $dogs[2] = \%kennel;
-  my $mutts = \%kennel;
-  
-#############
-##
-  $want = <<'EOT';
-%kennels = (
-  First => \'Fido',
-  Second => \'Wags'
-);
-@dogs = (
-  $kennels{First},
-  $kennels{Second},
-  \%kennels
-);
-%mutts = %kennels;
-EOT
-
-  my $d = Data::Dumper->new( [\%kennel, \@dogs, $mutts], [qw(*kennels *dogs *mutts)] );
-  TEST($d->Dump);
-  
-#############
-##
-  $want = <<'EOT';
-%kennels = %kennels;
-@dogs = @dogs;
-%mutts = %kennels;
-EOT
-
-  TEST($d->Dump);
-  
-#############
-##
-  $want = <<'EOT';
-%kennels = (
-  First => \'Fido',
-  Second => \'Wags'
-);
-@dogs = (
-  $kennels{First},
-  $kennels{Second},
-  \%kennels
-);
-%mutts = %kennels;
-EOT
-
-  $d->Reset;
-  TEST($d->Dump);
-
-#############
-##
-  $want = <<'EOT';
-@dogs = (
-  'Fido',
-  'Wags',
-  {
-    First => \$dogs[0],
-    Second => \$dogs[1]
-  }
-);
-%kennels = %{$dogs[2]};
-%mutts = %{$dogs[2]};
-EOT
-
-  $d = Data::Dumper->new( [\@dogs, \%kennel, $mutts], [qw(*dogs *kennels *mutts)] );
-  TEST($d->Dump);
-  
-#############
-##
-  $d->Reset;
-  TEST($d->Dump);
-
-#############
-##
-  $want = <<'EOT';
-@dogs = (
-  'Fido',
-  'Wags',
-  {
-    First => \'Fido',
-    Second => \'Wags'
-  }
-);
-%kennels = (
-  First => \'Fido',
-  Second => \'Wags'
-);
-EOT
-
-  $d = Data::Dumper->new( [\@dogs, \%kennel], [qw(*dogs *kennels)] );
-  $d->Deepcopy(1);
-  TEST($d->Dump);
-  
-}
-
-#############
-##
-print "### XS tests\n";
-
-if ($XS) {
-
-#############
-##
-  $want = <<'EOT';
-$a = [
-  1,
-  {
-    'a' => [],
-    'b' => {},
-    'c' => [
-      'c'
-    ]
-  },
-  []
-];
-$a->[1]{'a'} = $a;
-$a->[1]{'b'} = $a->[1];
-$a->[2] = $a->[1]{'c'};
-$b = $a->[1];
-$c = $a->[1]{'c'};
-EOT
-
-  $Data::Dumper::Purity = 1;
-  TEST(Data::Dumper->Dumpxs([$a,$b,$c], [qw(a b c)]));
-  
-#############
-##
-  $want = <<'EOT';
-@a = (
-  1,
-  {
-    'a' => [],
-    'b' => {},
-    'c' => [
-      'c'
-    ]
-  },
-  []
-);
-$a[1]{'a'} = \@a;
-$a[1]{'b'} = $a[1];
-$a[2] = $a[1]{'c'};
-$b = $a[1];
-EOT
-
-  $Data::Dumper::Purity = 1;         # fill in the holes for eval
-  TEST(Data::Dumper->Dumpxs([$a, $b], [qw(*a b)])); # print as @a
-
-#############
-##
-  $want = <<'EOT';
-%b = (
-  'a' => [
-    1,
-    {},
-    [
-      'c'
-    ]
-  ],
-  'b' => {},
-  'c' => []
-);
-$b{'a'}[1] = \%b;
-$b{'b'} = \%b;
-$b{'c'} = $b{'a'}[2];
-$a = $b{'a'};
-EOT
-
-  TEST(Data::Dumper->Dumpxs([$b, $a], [qw(*b a)])); # print as %b
-
-
-#############
-##
-  $want = <<'EOT';
-$a = [
-  1,
-  {
-    'a' => [],
-    'b' => {},
-    'c' => []
-  },
-  []
-];
-$a->[1]{'a'} = $a;
-$a->[1]{'b'} = $a->[1];
-$a->[1]{'c'} = \@c;
-$a->[2] = \@c;
-$b = $a->[1];
+  $WANT = <<'EOT';
+#$foo = \*::foo;
+#*::foo = \5;
+#*::foo = [
+#  10,
+#  '',
+#  {
+#    'a' => 1,
+#    'b' => '',
+#    'c' => [],
+#    'd' => {}
+#  }
+#];
+#*::foo{ARRAY}->[1] = $foo;
+#*::foo{ARRAY}->[2]{'b'} = *::foo{SCALAR};
+#*::foo{ARRAY}->[2]{'c'} = *::foo{ARRAY};
+#*::foo{ARRAY}->[2]{'d'} = *::foo{ARRAY}->[2];
+#*::foo = *::foo{ARRAY}->[2];
+#$bar = *::foo{ARRAY};
+#$baz = *::foo{ARRAY}->[2];
 EOT
 
   $Data::Dumper::Indent = 1;
-  $d = Data::Dumper->new([$a,$b], [qw(a b)]);     # go OO
-  $d->Seen({'*c' => $c});            # stash a ref without printing it
-  TEST($d->Dumpxs);
+  TEST q(Data::Dumper->Dump([\\*foo, \\@foo, \\%foo], ['foo', 'bar', 'baz']));
+  TEST q(Data::Dumper->Dumpxs([\\*foo, \\@foo, \\%foo], ['foo', 'bar', 'baz'])) if $XS;
 
-
-#############
+############# 61
 ##
-  $want = <<'EOT';
-$a = [
-  #0
-  1,
-  #1
-  {
-    'a' => $a,
-    'b' => $a->[1],
-    'c' => [
-             #0
-             'c'
-           ]
-  },
-  #2
-  $a->[1]{'c'}
-];
-$b = $a->[1];
+  $WANT = <<'EOT';
+#@bar = (
+#  10,
+#  \*::foo,
+#  {}
+#);
+#*::foo = \5;
+#*::foo = \@bar;
+#*::foo = {
+#  'a' => 1,
+#  'b' => '',
+#  'c' => [],
+#  'd' => {}
+#};
+#*::foo{HASH}->{'b'} = *::foo{SCALAR};
+#*::foo{HASH}->{'c'} = \@bar;
+#*::foo{HASH}->{'d'} = *::foo{HASH};
+#$bar[2] = *::foo{HASH};
+#%baz = %{*::foo{HASH}};
+#$foo = $bar[1];
 EOT
 
-  $d->Indent(3);
-  $d->Reset;                         # empty the seen cache
-  $d->Purity(0);
-  TEST($d->Dumpxs);
+  TEST q(Data::Dumper->Dump([\\@foo, \\%foo, \\*foo], ['*bar', '*baz', '*foo']));
+  TEST q(Data::Dumper->Dumpxs([\\@foo, \\%foo, \\*foo], ['*bar', '*baz', '*foo'])) if $XS;
 
-
-#############
+############# 67
 ##
-  $want = <<'EOT';
-$VAR1 = [
-  1,
-  {
-    'a' => [],
-    'b' => {},
-    'c' => [
-      'c'
-    ]
-  },
-  []
-];
-$VAR1->[1]{'a'} = $VAR1;
-$VAR1->[1]{'b'} = $VAR1->[1];
-$VAR1->[2] = $VAR1->[1]{'c'};
+  $WANT = <<'EOT';
+#$bar = [
+#  10,
+#  \*::foo,
+#  {}
+#];
+#*::foo = \5;
+#*::foo = $bar;
+#*::foo = {
+#  'a' => 1,
+#  'b' => '',
+#  'c' => [],
+#  'd' => {}
+#};
+#*::foo{HASH}->{'b'} = *::foo{SCALAR};
+#*::foo{HASH}->{'c'} = $bar;
+#*::foo{HASH}->{'d'} = *::foo{HASH};
+#$bar->[2] = *::foo{HASH};
+#$baz = *::foo{HASH};
+#$foo = $bar->[1];
 EOT
 
-  TEST(Data::Dumper::DumperX($a));
+  TEST q(Data::Dumper->Dump([\\@foo, \\%foo, \\*foo], ['bar', 'baz', 'foo']));
+  TEST q(Data::Dumper->Dumpxs([\\@foo, \\%foo, \\*foo], ['bar', 'baz', 'foo'])) if $XS;
 
-
-#############
+############# 73
 ##
-  $want = <<'EOT';
-[
-  1,
-  {
-    'a' => $VAR1,
-    'b' => $VAR1->[1],
-    'c' => [
-      'c'
-    ]
-  },
-  $VAR1->[1]{'c'}
-]
-EOT
-
-  {
-    local $Data::Dumper::Purity = 0;
-    local $Data::Dumper::Terse = 1;
-    TEST(Data::Dumper::DumperX($a));
-  }
-
-
-#############
-##
-  $want = <<"EOT";
-\$VAR1 = {
-  'abc\000\efg' => 'mno\000'
-};
-EOT
-
-  $foo = { "abc\000\efg" => "mno\000" };
-  {
-    local $Data::Dumper::Useqq = 1;
-    TEST(Data::Dumper::DumperX($foo));
-  }
-
-#############
-#############
-
-  $foo = 5;
-  @foo = (10,\*foo);
-  %foo = (a=>1,b=>\$foo,c=>\@foo);
-  $foo{d} = \%foo;
-  $foo[2] = \%foo;
-
-#############
-##
-  $want = <<'EOT';
-$foo = \*{'main::foo'};
-*{'main::foo'}{SCALAR} = \5;
-*{'main::foo'}{ARRAY} = [
-  10,
-  '',
-  {
-    'a' => 1,
-    'b' => '',
-    'c' => [],
-    'd' => {}
-  }
-];
-*{'main::foo'}{ARRAY}->[1] = $foo;
-*{'main::foo'}{ARRAY}->[2]{'b'} = *{'main::foo'}{SCALAR};
-*{'main::foo'}{ARRAY}->[2]{'c'} = *{'main::foo'}{ARRAY};
-*{'main::foo'}{ARRAY}->[2]{'d'} = *{'main::foo'}{ARRAY}->[2];
-*{'main::foo'}{HASH} = *{'main::foo'}{ARRAY}->[2];
-@bar = @{*{'main::foo'}{ARRAY}};
-%baz = %{*{'main::foo'}{ARRAY}->[2]};
-EOT
-
-  $Data::Dumper::Purity = 1;
-  TEST(Data::Dumper->Dumpxs([\*foo, \@foo, \%foo], ['*foo', '*bar', '*baz']));
-
-#############
-##
-  $want = <<'EOT';
-$foo = \*{'main::foo'};
-*{'main::foo'}{SCALAR} = \5;
-*{'main::foo'}{ARRAY} = [
-  10,
-  '',
-  {
-    'a' => 1,
-    'b' => '',
-    'c' => [],
-    'd' => {}
-  }
-];
-*{'main::foo'}{ARRAY}->[1] = $foo;
-*{'main::foo'}{ARRAY}->[2]{'b'} = *{'main::foo'}{SCALAR};
-*{'main::foo'}{ARRAY}->[2]{'c'} = *{'main::foo'}{ARRAY};
-*{'main::foo'}{ARRAY}->[2]{'d'} = *{'main::foo'}{ARRAY}->[2];
-*{'main::foo'}{HASH} = *{'main::foo'}{ARRAY}->[2];
-$bar = *{'main::foo'}{ARRAY};
-$baz = *{'main::foo'}{ARRAY}->[2];
-EOT
-
-  TEST(Data::Dumper->Dumpxs([\*foo, \@foo, \%foo], ['foo', 'bar', 'baz']));
-
-#############
-##
-  $want = <<'EOT';
-@bar = (
-  10,
-  \*{'main::foo'},
-  {}
-);
-*{'main::foo'}{SCALAR} = \5;
-*{'main::foo'}{ARRAY} = \@bar;
-*{'main::foo'}{HASH} = {
-  'a' => 1,
-  'b' => '',
-  'c' => [],
-  'd' => {}
-};
-*{'main::foo'}{HASH}->{'b'} = *{'main::foo'}{SCALAR};
-*{'main::foo'}{HASH}->{'c'} = \@bar;
-*{'main::foo'}{HASH}->{'d'} = *{'main::foo'}{HASH};
-$bar[2] = *{'main::foo'}{HASH};
-%baz = %{*{'main::foo'}{HASH}};
-$foo = $bar[1];
-EOT
-
-  TEST(Data::Dumper->Dumpxs([\@foo, \%foo, \*foo], ['*bar', '*baz', '*foo']));
-
-#############
-##
-  $want = <<'EOT';
-$bar = [
-  10,
-  \*{'main::foo'},
-  {}
-];
-*{'main::foo'}{SCALAR} = \5;
-*{'main::foo'}{ARRAY} = $bar;
-*{'main::foo'}{HASH} = {
-  'a' => 1,
-  'b' => '',
-  'c' => [],
-  'd' => {}
-};
-*{'main::foo'}{HASH}->{'b'} = *{'main::foo'}{SCALAR};
-*{'main::foo'}{HASH}->{'c'} = $bar;
-*{'main::foo'}{HASH}->{'d'} = *{'main::foo'}{HASH};
-$bar->[2] = *{'main::foo'}{HASH};
-$baz = *{'main::foo'}{HASH};
-$foo = $bar->[1];
-EOT
-
-  TEST(Data::Dumper->Dumpxs([\@foo, \%foo, \*foo], ['bar', 'baz', 'foo']));
-
-#############
-##
-  $want = <<'EOT';
-$foo = \*{'main::foo'};
-@bar = (
-  10,
-  $foo,
-  {
-    'a' => 1,
-    'b' => \5,
-    'c' => \@bar,
-    'd' => $bar[2]
-  }
-);
-%baz = %{$bar[2]};
+  $WANT = <<'EOT';
+#$foo = \*::foo;
+#@bar = (
+#  10,
+#  $foo,
+#  {
+#    a => 1,
+#    b => \5,
+#    c => \@bar,
+#    d => $bar[2]
+#  }
+#);
+#%baz = %{$bar[2]};
 EOT
 
   $Data::Dumper::Purity = 0;
-  TEST(Data::Dumper->Dumpxs([\*foo, \@foo, \%foo], ['*foo', '*bar', '*baz']));
+  TEST q(Data::Dumper->Dump([\\*foo, \\@foo, \\%foo], ['*foo', '*bar', '*baz']));
+  TEST q(Data::Dumper->Dumpxs([\\*foo, \\@foo, \\%foo], ['*foo', '*bar', '*baz'])) if $XS;
 
-#############
+############# 79
 ##
-  $want = <<'EOT';
-$foo = \*{'main::foo'};
-$bar = [
-  10,
-  $foo,
-  {
-    'a' => 1,
-    'b' => \5,
-    'c' => $bar,
-    'd' => $bar->[2]
-  }
-];
-$baz = $bar->[2];
+  $WANT = <<'EOT';
+#$foo = \*::foo;
+#$bar = [
+#  10,
+#  $foo,
+#  {
+#    a => 1,
+#    b => \5,
+#    c => $bar,
+#    d => $bar->[2]
+#  }
+#];
+#$baz = $bar->[2];
 EOT
 
-  TEST(Data::Dumper->Dumpxs([\*foo, \@foo, \%foo], ['foo', 'bar', 'baz']));
+  TEST q(Data::Dumper->Dump([\\*foo, \\@foo, \\%foo], ['foo', 'bar', 'baz']));
+  TEST q(Data::Dumper->Dumpxs([\\*foo, \\@foo, \\%foo], ['foo', 'bar', 'baz'])) if $XS;
 
 }
 
@@ -821,103 +426,136 @@ EOT
 #############
 {
   package main;
-  my @dogs = ( 'Fido', 'Wags' );
-  my %kennel = (
-  	    First => \$dogs[0],
-  	    Second =>  \$dogs[1],
-  	   );
+  @dogs = ( 'Fido', 'Wags' );
+  %kennel = (
+            First => \$dogs[0],
+            Second =>  \$dogs[1],
+           );
   $dogs[2] = \%kennel;
-  my $mutts = \%kennel;
+  $mutts = \%kennel;
+  $mutts = $mutts;         # avoid warning
   
-#############
+############# 85
 ##
-  $want = <<'EOT';
-%kennels = (
-  'First' => \'Fido',
-  'Second' => \'Wags'
-);
-@dogs = (
-  $kennels{'First'},
-  $kennels{'Second'},
-  \%kennels
-);
-%mutts = %kennels;
+  $WANT = <<'EOT';
+#%kennels = (
+#  First => \'Fido',
+#  Second => \'Wags'
+#);
+#@dogs = (
+#  $kennels{First},
+#  $kennels{Second},
+#  \%kennels
+#);
+#%mutts = %kennels;
 EOT
 
-  my $d = Data::Dumper->new( [\%kennel, \@dogs, $mutts], [qw(*kennels *dogs *mutts)] );
-  TEST($d->Dumpxs);
-  
-#############
-##
-  $want = <<'EOT';
-%kennels = %kennels;
-@dogs = @dogs;
-%mutts = %kennels;
-EOT
-
-  TEST($d->Dumpxs);
-  
-#############
-##
-  $want = <<'EOT';
-%kennels = (
-  'First' => \'Fido',
-  'Second' => \'Wags'
-);
-@dogs = (
-  $kennels{'First'},
-  $kennels{'Second'},
-  \%kennels
-);
-%mutts = %kennels;
-EOT
-
-  $d->Reset;
-  TEST($d->Dumpxs);
-
-#############
-##
-  $want = <<'EOT';
-@dogs = (
-  'Fido',
-  'Wags',
-  {
-    'First' => \$dogs[0],
-    'Second' => \$dogs[1]
+  TEST q(
+	 $d = Data::Dumper->new([\\%kennel, \\@dogs, $mutts],
+				[qw(*kennels *dogs *mutts)] );
+	 $d->Dump;
+	);
+  if ($XS) {
+    TEST q(
+	   $d = Data::Dumper->new([\\%kennel, \\@dogs, $mutts],
+				  [qw(*kennels *dogs *mutts)] );
+	   $d->Dumpxs;
+	  );
   }
-);
-%kennels = %{$dogs[2]};
-%mutts = %{$dogs[2]};
-EOT
-
-  $d = Data::Dumper->new( [\@dogs, \%kennel, $mutts], [qw(*dogs *kennels *mutts)] );
-  TEST($d->Dumpxs);
   
-#############
+############# 91
 ##
-  $d->Reset;
-  TEST($d->Dumpxs);
-
-#############
-##
-  $want = <<'EOT';
-@dogs = (
-  'Fido',
-  'Wags',
-  {
-    'First' => \'Fido',
-    'Second' => \'Wags'
-  }
-);
-%kennels = (
-  'First' => \'Fido',
-  'Second' => \'Wags'
-);
+  $WANT = <<'EOT';
+#%kennels = %kennels;
+#@dogs = @dogs;
+#%mutts = %kennels;
 EOT
 
-  $d = Data::Dumper->new( [\@dogs, \%kennel], [qw(*dogs *kennels)] );
-  $d->Deepcopy(1);
-  TEST($d->Dumpxs);
+  TEST q($d->Dump);
+  TEST q($d->Dumpxs) if $XS;
+  
+############# 97
+##
+  $WANT = <<'EOT';
+#%kennels = (
+#  First => \'Fido',
+#  Second => \'Wags'
+#);
+#@dogs = (
+#  $kennels{First},
+#  $kennels{Second},
+#  \%kennels
+#);
+#%mutts = %kennels;
+EOT
 
+  
+  TEST q($d->Reset; $d->Dump);
+  if ($XS) {
+    TEST q($d->Reset; $d->Dumpxs);
+  }
+
+############# 103
+##
+  $WANT = <<'EOT';
+#@dogs = (
+#  'Fido',
+#  'Wags',
+#  {
+#    First => \$dogs[0],
+#    Second => \$dogs[1]
+#  }
+#);
+#%kennels = %{$dogs[2]};
+#%mutts = %{$dogs[2]};
+EOT
+
+  TEST q(
+	 $d = Data::Dumper->new([\\@dogs, \\%kennel, $mutts],
+				[qw(*dogs *kennels *mutts)] );
+	 $d->Dump;
+	);
+  if ($XS) {
+    TEST q(
+	   $d = Data::Dumper->new([\\@dogs, \\%kennel, $mutts],
+				  [qw(*dogs *kennels *mutts)] );
+	   $d->Dumpxs;
+	  );
+  }
+  
+############# 109
+##
+  TEST q($d->Reset; $d->Dump);
+  if ($XS) {
+    TEST q($d->Reset; $d->Dumpxs);
+  }
+
+############# 115
+##
+  $WANT = <<'EOT';
+#@dogs = (
+#  'Fido',
+#  'Wags',
+#  {
+#    First => \'Fido',
+#    Second => \'Wags'
+#  }
+#);
+#%kennels = (
+#  First => \'Fido',
+#  Second => \'Wags'
+#);
+EOT
+
+  TEST q(
+	 $d = Data::Dumper->new( [\@dogs, \%kennel], [qw(*dogs *kennels)] );
+	 $d->Deepcopy(1);
+	 $d->Dump;
+	);
+  if ($XS) {
+    TEST q($d->Reset;$d->Dumpxs);
+  }
+  
 }
+
 

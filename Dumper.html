@@ -465,17 +465,13 @@ will be remedied in time, with the arrival of prototypes in later versions
 of Perl.  For now, you need to use the extended usage form, and prepend the
 name with a <CODE>*</CODE> to output it as a hash or array.
 <p><CODE>Data::Dumper</CODE> cheats with CODE references.  If a code reference is
-encountered in the structure being processed, an anonymous subroutine
-returning the perl string-interpolated representation of the original CODE
-reference will be inserted in its place, and a warning will be printed if
-<CODE>Purity</CODE> is set.  You can <CODE>eval</CODE> the result, but bear in mind that the
-anonymous sub that gets created is a dummy placeholder. Someday, perl will
-have a switch to cache-on-demand the string representation of a compiled
-piece of code, I hope.
-<p>Laziness dictates that the output of <CODE><EM>Dumpxs()</EM></CODE> be slightly different than 
-<CODE><EM>Dump()</EM></CODE> in these ways: hash keys are always quoted; GLOBs are always dumped
-in curlies; and indentation does not take into account any leading <CODE><STRONG>$VAR</STRONG></CODE><EM>n</EM>
-string; the <CODE>Useqq</CODE> flag is not honored by <CODE><EM>Dumpxs()</EM></CODE> (it always outputs 
+encountered in the structure being processed, an anonymous subroutine that
+contains the string '``DUMMY''' will be inserted in its place, and a warning
+will be printed if <CODE>Purity</CODE> is set.  You can <CODE>eval</CODE> the result, but bear
+in mind that the anonymous sub that gets created is just a placeholder.
+Someday, perl will have a switch to cache-on-demand the string
+representation of a compiled piece of code, I hope.
+<p>The <CODE>Useqq</CODE> flag is not honored by <CODE><EM>Dumpxs()</EM></CODE> (it always outputs
 strings in single quotes).
 <p>SCALAR objects have the weirdest looking <CODE>bless</CODE> workaround.
 <p><p><hr>
@@ -494,7 +490,7 @@ modify it under the same terms as Perl itself.
 <A NAME="Dumper_version_0">
 VERSION</A>
 </H1>
-Version 2.06    (2 December 1996)
+Version 2.07    (7 December 1996)
 <p><p><hr>
 
 <H1> 

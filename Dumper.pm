@@ -9,7 +9,7 @@
 
 package Data::Dumper;
 
-$VERSION = $VERSION = '2.06';
+$VERSION = $VERSION = '2.07';
 
 #$| = 1;
 
@@ -52,24 +52,24 @@ sub new {
   $n = [] unless (defined($n) && (ref($v) eq 'ARRAY'));
 
   my($s) = { 
-             level      => 0,        # current recursive depth
-	     indent     => $Indent,  # various styles of indenting
-	     pad	=> $Pad,     # all lines prefixed by this string
-	     xpad       => "",       # padding-per-level
-	     apad       => "",       # added padding for hash keys n such
-	     sep        => "",       # list separator
-	     seen       => {},       # local (nested) refs (id => [name, val])
-	     todump     => $v,       # values to dump []
-	     names      => $n,       # optional names for values []
-	     varname    => $Varname, # prefix to use for tagging nameless ones
-             purity     => $Purity,  # degree to which output is evalable
-             useqq 	=> $Useqq,   # use "" for strings (backslashitis ensues)
-             terse 	=> $Terse,   # avoid name output (where feasible)
-             freezer	=> $Freezer, # name of Freezer method for objects
-             toaster	=> $Toaster, # name of method to revive objects
-             deepcopy	=> $Deepcopy,# dont cross-ref, except to stop recursion
-#	     expdepth   => $Expdepth,# cutoff depth for explicit dumping
-#	     maxdepth	=> $Maxdepth,# depth beyond which we give up
+             level      => 0,           # current recursive depth
+	     indent     => $Indent,     # various styles of indenting
+	     pad	=> $Pad,        # all lines prefixed by this string
+	     xpad       => "",          # padding-per-level
+	     apad       => "",          # added padding for hash keys n such
+	     sep        => "",          # list separator
+	     seen       => {},          # local (nested) refs (id => [name, val])
+	     todump     => $v,          # values to dump []
+	     names      => $n,          # optional names for values []
+	     varname    => $Varname,    # prefix to use for tagging nameless ones
+             purity     => $Purity,     # degree to which output is evalable
+             useqq 	=> $Useqq,      # use "" for strings (backslashitis ensues)
+             terse 	=> $Terse,      # avoid name output (where feasible)
+             freezer	=> $Freezer,    # name of Freezer method for objects
+             toaster	=> $Toaster,    # name of method to revive objects
+             deepcopy	=> $Deepcopy,   # dont cross-ref, except to stop recursion
+#	     expdepth   => $Expdepth,   # cutoff depth for explicit dumping
+#	     maxdepth	=> $Maxdepth,   # depth beyond which we give up
 	   };
 
   if ($Indent > 0) {
@@ -172,19 +172,18 @@ sub Dump {
       $name = "\$" . $s->{varname} . $i;
     }
 
-    my $valstr = $s->_dump($val, $name);
-    if ($s->{terse} and !@post) {
-      $out .= $s->{pad} . $valstr . $s->{sep};
+    my $valstr;
+    {
+      local($s->{apad}) = $s->{apad};
+      $s->{apad} .= ' ' x (length($name) + 3) if $s->{indent} >= 2;
+      $valstr = $s->_dump($val, $name);
     }
-    else {
-      if ($s->{indent} >= 2) {
-	my $extrapad = ' ' x (length($name) + 3);
-	$valstr =~ s|\n(.)|\n$extrapad$1|g;
-      }
-      $out .= $s->{pad} . "$name = " . $valstr . ';' . $s->{sep};
-      $out .= $s->{pad} . join(';' . $s->{sep} . $s->{pad}, @post) 
-	. ';' . $s->{sep} if @post;
-    }
+
+    $valstr = "$name = " . $valstr . ';' if @post or !$s->{terse};
+    $out .= $s->{pad} . $valstr . $s->{sep};
+    $out .= $s->{pad} . join(';' . $s->{sep} . $s->{pad}, @post) 
+      . ';' . $s->{sep} if @post;
+
     push @out, $out;
   }
   return wantarray ? @out : join('', @out);
@@ -364,7 +363,7 @@ sub _dump {
 	for $k (qw(SCALAR ARRAY HASH)) {
 	  # _dump can push into @post, so we hold our place using $postlen
 	  my $postlen = scalar @post;
-	  $post[$postlen] = "\*$sname\{$k\} = ";
+	  $post[$postlen] = "\*$sname = ";
 	  local ($s->{apad}) = " " x length($post[$postlen]) if $s->{indent} >= 2;
 	  $post[$postlen] .= $s->_dump(*{$name}{$k}, "\*$sname\{$k\}");
 	}
@@ -871,18 +870,14 @@ of Perl.  For now, you need to use the extended usage form, and prepend the
 name with a C<*> to output it as a hash or array.
 
 C<Data::Dumper> cheats with CODE references.  If a code reference is
-encountered in the structure being processed, an anonymous subroutine
-returning the perl string-interpolated representation of the original CODE
-reference will be inserted in its place, and a warning will be printed if
-C<Purity> is set.  You can C<eval> the result, but bear in mind that the
-anonymous sub that gets created is a dummy placeholder. Someday, perl will
-have a switch to cache-on-demand the string representation of a compiled
-piece of code, I hope.
+encountered in the structure being processed, an anonymous subroutine that
+contains the string '"DUMMY"' will be inserted in its place, and a warning
+will be printed if C<Purity> is set.  You can C<eval> the result, but bear
+in mind that the anonymous sub that gets created is just a placeholder.
+Someday, perl will have a switch to cache-on-demand the string
+representation of a compiled piece of code, I hope.
 
-Laziness dictates that the output of C<Dumpxs()> be slightly different than 
-C<Dump()> in these ways: hash keys are always quoted; GLOBs are always dumped
-in curlies; and indentation does not take into account any leading C<$VAR>I<n>
-string; the C<Useqq> flag is not honored by C<Dumpxs()> (it always outputs 
+The C<Useqq> flag is not honored by C<Dumpxs()> (it always outputs
 strings in single quotes).
 
 SCALAR objects have the weirdest looking C<bless> workaround.
@@ -899,7 +894,7 @@ modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-Version 2.06    (2 December 1996)
+Version 2.07    (7 December 1996)
 
 
 =head1 SEE ALSO

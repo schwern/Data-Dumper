@@ -8,4 +8,5 @@ flip
 Dumper.pm
 Dumper.pm.XSUB
 Dumper.xs.XSUB
+Dumper.html
 t/dumper.t
