@@ -9,7 +9,7 @@
 
 package Data::Dumper;
 
-$VERSION = $VERSION = '2.01';
+$VERSION = $VERSION = '2.02';
 
 #$| = 1;
 
@@ -589,7 +589,7 @@ default is "VAR".
 
 =head1 BUGS
 
-Due to limitations of Perl subroutine call semantics, you can't pass an
+Due to limitations of Perl subroutine call semantics, you cannot pass an
 array or hash.  Prepend it with a C<\> to pass its reference instead.  This
 will be remedied in time, with the arrival of prototypes in later versions
 of Perl.  For now, you need to use the extended usage form, and prepend the
@@ -618,7 +618,7 @@ modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-Version 2.01beta    10 April 1996
+Version 2.02beta    13 April 1996
 
 
 =head1 SEE ALSO

@@ -119,7 +119,8 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	ival = SvRV(val);
 	flags = SvFLAGS(ival);
 	realtype = SvTYPE(ival);
-	i = sprintf(id, "0x%lx", (unsigned long)ival);
+        (void) sprintf(id, "0x%lx", (unsigned long)ival);
+	i = strlen(id);
 	if (SvOBJECT(ival))
 	    realpack = HvNAME(SvSTASH(ival));
 	else
@@ -239,7 +240,8 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 		
 		ilen = inamelen;
 		sv_setiv(ixsv, ix);
-		ilen += sprintf(iname+ilen, "%ld", ix);
+                (void) sprintf(iname+ilen, "%ld", ix);
+		ilen = strlen(iname);
 		iname[ilen++] = ']'; iname[ilen] = '\0';
 		if (indent >= 3) {
 		    sv_catsv(retval, totpad);
@@ -357,7 +359,9 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	    SvREFCNT_dec(totpad);
 	}
 	else if (realtype == SVt_PVCV) {
-	    long len = sprintf(tmpbuf, "sub { 'CODE(0x%lx)' }", (unsigned long)ival);
+            int len;
+	    (void) sprintf(tmpbuf, "sub { 'CODE(0x%lx)' }", (unsigned long)ival);
+            len = strlen(tmpbuf);
 	    sv_catpvn(retval, tmpbuf, len);
 	    if (purity)
 		warn("encountered CODE ref, using dummy placeholder");
@@ -385,8 +389,11 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	STRLEN i;
 	
 	if (SvIOK(val)) {
+            int len;
 	    i = SvIV(val);
-	    sv_catpvn(retval, tmpbuf, sprintf(tmpbuf, "%d", i));
+            (void) sprintf(tmpbuf, "%d", i);
+            len = strlen(tmpbuf);
+	    sv_catpvn(retval, tmpbuf, len);
 	    return 1;
 	}
 	else if (SvOK(val)) {
@@ -426,7 +433,7 @@ MODULE = Data::Dumper		PACKAGE = Data::Dumper         PREFIX = Data_Dumper_
 # This is the exact equivalent of Dump.  Well, almost. The things that are
 # different: hash keys are always quoted; GLOBs are always dumped in curlies.
 #
-# Doesn't leak, as far as I can tell from tests. 
+# Doesnt leak, as far as I can tell from tests. 
 #
 
 void
@@ -541,7 +548,8 @@ Data_Dumper_Dumpxs(href, ...)
 			    int nchars = 0;
 			    sv_setpvn(name, "$", 1);
 			    sv_catsv(name, anonpfx);
-			    nchars = sprintf(tmpbuf, "%ld", i+1);
+			    (void) sprintf(tmpbuf, "%ld", i+1);
+                            nchars = strlen(tmpbuf);
 			    sv_catpvn(name, tmpbuf, nchars);
 			}
 			if (indent >= 2)

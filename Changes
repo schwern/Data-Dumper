@@ -6,6 +6,12 @@ HISTORY - release history for Data::Dumper
 
 =over 8
 
+=item 2.02beta  (13 April 1996)
+
+Non portable sprintf usage in XS code fixed (thanks to 
+Ulrich Pfeifer <pfeifer@charly.informatik.uni-dortmund.de>).
+
+
 =item 2.01beta  (10 April 1996)
 
 Minor bugfix (single digit numbers were always getting quoted).
@@ -26,7 +32,7 @@ tripped up in its implicit quoting of the word before '=>'.  The
 fix: C<Data::Dumper::Purity>, when set, always triggers quotes
 around hash keys.
 
-Andreas Koenig <kanna@mind.de> pointed out that handling octals
+Andreas Koenig <k@anna.in-berlin.de> pointed out that handling octals
 is busted.  His patch added.
 
 Dead code removed, other minor documentation fixes.
