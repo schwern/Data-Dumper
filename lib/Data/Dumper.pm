@@ -9,7 +9,7 @@
 
 package Data::Dumper;
 
-$VERSION = $VERSION = '1.22';
+$VERSION = $VERSION = '1.23';
 
 #$| = 1;
 
@@ -27,8 +27,6 @@ $Purity = 0 unless defined $Purity;
 $Pad = "" unless defined $Pad;
 $Varname = "VAR" unless defined $Varname;
 
-$i = 0;
-
 #
 # expects an arrayref of values to be dumped.
 # can optionally pass an arrayref of names for the values.
@@ -38,7 +36,7 @@ $i = 0;
 sub new {
   my($c, $v, $n) = @_;
 
-  die "Usage:  $c->new(ARRAYREF, [ARRAYREF])" 
+  die "Usage:  PACKAGE->new(ARRAYREF, [ARRAYREF])" 
     unless (defined($v) && (ref($v) eq 'ARRAY'));
   $n = [] unless (defined($n) && (ref($v) eq 'ARRAY'));
 
@@ -54,37 +52,21 @@ sub new {
 	     names      => $n,       # optional names for values []
 	     anonpfx    => $Varname, # prefix to use for tagging nameless ones
              purity     => $Purity,  # degree to which output is evalable
+#             useqq => 0,             # use "" for strings (backslashitis)
+#             freezer => "",          # name of Freezer method for objects
 #             maxdepth => 0,          # depth beyond which we give up
 #	      expdepth   => 0,        # cutoff for explicit dumping
 	   };
 
+  if ($Indent > 0) {
+    $s->{pad} = "  ";
+    $s->{sep} = "\n";
+  }
   return bless($s, $c);
 }
 
-
 #
-# non-OO style of earlier version
-#
-sub Dumper {
-  return new("Data::Dumper", [@_])->Dump();
-}
-
-
-#
-# reset the "seen" cache 
-#
-sub Reset {
-  my($s) = shift;
-  $s->{seen} = {};
-}
-
-
-# set or query the table of already seen references
-# expects a hashref of name => ref pairs. if the first char of
-# name is *, name will be converted to @name or %name depending
-# on the ref. in other cases, it will become $name.  if no arg
-# is supplied, will return a list of name, ref pairs in an array
-# context
+# add-to or query the table of already seen references
 #
 sub Seen {
   my($s, $g) = @_;
@@ -92,13 +74,13 @@ sub Seen {
     my($k, $v, $id);
     while (($k, $v) = each %$g) {
       if (defined $v and ref $v) {
-	($id) = ("$v" =~ /\((.*)\)$/o);
-	if ($k =~ /^[*](.*)$/o) {
+	($id) = ("$v" =~ /\((.*)\)$/);
+	if ($k =~ /^[*](.*)$/) {
 	  $k = (ref $v eq 'ARRAY') ? ( "\\\@" . $1 ) :
 	    (ref $v eq 'HASH') ? ( "\\\%" . $1 ) :
 	      ("\$" . $1 );
 	}
-	elsif ($k !~ /^\$/o) {
+	elsif ($k !~ /^\$/) {
 	  $k = "\$" . $k;
 	}
 	$s->{seen}{$id} = [$k, $v];
@@ -109,7 +91,33 @@ sub Seen {
     }
   }
   else {
-    return wantarray ? map { @$_ } values %{$s->{seen}} : undef;
+    return map { @$_ } values %{$s->{seen}};
+  }
+}
+
+#
+# set or query the values to be dumped
+#
+sub Values {
+  my($s, $v) = @_;
+  if (defined($v) && (ref($v) eq 'ARRAY'))  {
+    $s->{todump} = [@$v];        # make a copy
+  }
+  else {
+    return @{$s->{todump}};
+  }
+}
+
+#
+# set or query the names of the values to be dumped
+#
+sub Names {
+  my($s, $n) = @_;
+  if (defined($n) && (ref($n) eq 'ARRAY'))  {
+    $s->{names} = [@$n];         # make a copy
+  }
+  else {
+    return @{$s->{names}};
   }
 }
 
@@ -120,29 +128,17 @@ sub Seen {
 sub Dump {
   my($s) = shift;
   my($out, $val, $name);
+  my($i) = 0;
   local(@post);
 
   $s = $s->new(@_) unless ref $s;
   $out = "";
 
-  $s->{indent} = $Indent;
-  $s->{purity} = $Purity;
-  $s->{anonpfx} = $Varname;
-  $s->{xpad} = $Pad;
-  if ($Indent > 0) {
-    $s->{pad} = "  ";
-    $s->{sep} = "\n";
-  }
-  else {
-    $s->{pad} = "";
-    $s->{sep} = "";
-  }
-
   for $val (@{$s->{todump}}) {
     @post = ();
-    $name = shift(@{$s->{names}});
+    $name = $s->{names}[$i++];
     if (defined $name) {
-      if ($name =~ /^[*](.*)$/o) {
+      if ($name =~ /^[*](.*)$/) {
 	if (defined $val) {
 	  $name = (ref $val eq 'ARRAY') ? ( "\@" . $1 ) :
 	    (ref $val eq 'HASH') ? ( "\%" . $1 ) :
@@ -153,12 +149,12 @@ sub Dump {
 	  $val = [];
 	}
       }
-      elsif ($name !~ /^\$/o) {
+      elsif ($name !~ /^\$/) {
 	$name = "\$" . $name;
       }
     }
     else {
-      $name = "\$" . $s->{anonpfx} . ++$i;
+      $name = "\$" . $s->{anonpfx} . $i;
     }
     $s->{apad} = ' ' x (length($name) + 3) if $s->{indent} >= 2;
     $out .= $s->{xpad} . "$name = " . $s->_dump($val, $name) . ';' . $s->{sep};
@@ -174,7 +170,7 @@ sub Dump {
 sub _dump {
   my($s, $val, $name) = @_;
   my($sname);
-  my($out, $realpack, $realtype, $type, $i, $ipad, $id, $blesspad);
+  my($out, $realpack, $realtype, $type, $ipad, $id, $blesspad);
 
   return "undef" unless defined $val;
 
@@ -182,7 +178,7 @@ sub _dump {
   $out = "";
 
   if ($type) { 
-    ($realpack, $realtype, $id) = ("$val" =~ /^(([^=]*)\=)?(.*)\((.*)\)$/o)[1,2,3];
+    ($realpack, $realtype, $id) = ("$val" =~ /^(?:(.*)\=)?([^=]*)\(([^(]*)\)$/);
     
     # keep a tab on it so that we dont fall into recursive pit
     if (exists $s->{seen}{$id}) {
@@ -234,28 +230,29 @@ sub _dump {
     }
     elsif ($realtype eq 'ARRAY') {
       my($v, $pad, $mname);
-      $out .= ($name =~ /^\@/o) ? '(' : '[';
-      $i = -1;
+      my($i) = 0;
+      $out .= ($name =~ /^\@/) ? '(' : '[';
       $pad = $s->{sep} . $s->{xpad} . $s->{apad};
-      ($name =~ /^\@(.*)$/o) ? ($mname = "\$" . $1) : 
-	($name =~ /[]}]$/o) ? ($mname = $name) : ($mname = $name . '->');
+      ($name =~ /^\@(.*)$/) ? ($mname = "\$" . $1) : 
+	($name =~ /[]}]$/) ? ($mname = $name) : ($mname = $name . '->');
       for $v (@$val) {
-	$sname = $mname . '[' . ++$i . ']';
+	$sname = $mname . '[' . $i . ']';
 	$out .= $pad . $ipad . '#' . $i if $s->{indent} >= 3;
 	$out .= $pad . $ipad . $s->_dump($v, $sname);
-	$out .= "," if $i < $#$val;
+	$out .= "," if $i++ < $#$val;
       }
-      $out .= $pad . ($s->{pad} x ($s->{level} - 1)) unless substr($out, -1) eq '[';
-      $out .= ($name =~ /^\@/o) ? ')' : ']';
+      $out .= $pad . ($s->{pad} x ($s->{level} - 1)) if $i;
+      $out .= ($name =~ /^\@/) ? ')' : ']';
     }
     elsif ($realtype eq 'HASH') {
       my($k, $v, $pad, $lpad, $mname);
-      $out .= ($name =~ /^\%/o) ? '(' : '{';
+      $out .= ($name =~ /^\%/) ? '(' : '{';
       $pad = $s->{sep} . $s->{xpad} . $s->{apad};
       $lpad = $s->{apad};
-      ($name =~ /^\%(.*)$/o) ? ($mname = "\$" . $1) : 
-	($name =~ /[]}]$/o) ? ($mname = $name) : ($mname = $name . '->');
+      ($name =~ /^\%(.*)$/) ? ($mname = "\$" . $1) : 
+	($name =~ /[]}]$/) ? ($mname = $name) : ($mname = $name . '->');
       while (($k, $v) = each %$val) {
+	$k = '\'' . $k . '\'' if $k =~ s/([\\\'])/\\$1/g or $k =~ /[\W]|^$/;
 	$sname = $mname . '{' . $k . '}'; 
 	$out .= $pad . $ipad . $k . " => ";
 
@@ -264,15 +261,16 @@ sub _dump {
 	$out .= $s->_dump($v, $sname) . ",";
 	$s->{apad} = $lpad if $s->{indent} >= 2;
       }
-      if (substr($out, -1) ne '{') {
+      if (substr($out, -1) eq ',') {
 	chop $out;
 	$out .= $pad . ($s->{pad} x ($s->{level} - 1));
       }
-      $out .= ($name =~ /^\%/o) ? ')' : '}';
+      $out .= ($name =~ /^\%/) ? ')' : '}';
     }
     elsif ($realtype eq 'CODE') {
       $out .= "$val";
-      $out = 'sub { \'' . $out . '\'}';
+      $out = 'sub { \'' . $out . '\' }';
+      carp "Encountered CODE ref, using dummy placeholder" if $s->{purity};
     }
     else {
       die "Can\'t handle $realtype type.";
@@ -284,19 +282,58 @@ sub _dump {
     }
     $s->{level}--;
   }
-  else {   # simple scalar
-    if ($val =~ /^[+-]?\d+\.?[\d]*$/o || ref(\$val) eq 'GLOB') {
-      $out .= $val;                      # if number or glob
+  else {                                 # simple scalar
+    if ($val =~ /^-?\d{1,8}$/ || ref(\$val) eq 'GLOB') {
+      $out .= $val;                      # safe number or glob
     }
     else {
-      $val =~ s/([\\'])/\\$1/g;          #'
-      $out .= '\'' . $val .  '\'';       # if string 
+      $val =~ s/([\\\'])/\\$1/g;
+      $out .= '\'' . $val .  '\'';       # string 
     }
   }
 
   return $out;
 }
   
+#
+# non-OO style of earlier version
+#
+sub Dumper {
+  return Data::Dumper->Dump([@_]);
+}
+
+sub Dumpf { return Data::Dumper->Dump(@_) }
+
+sub Dumpp { print Data::Dumper->Dump(@_) }
+
+#
+# reset the "seen" cache 
+#
+sub Reset {
+  my($s) = shift;
+  $s->{seen} = {};
+}
+
+sub Indent {
+  my($s, $v) = @_;
+  defined($v) ? ($s->{indent} = $v) : $s->{indent};
+}
+
+sub Pad {
+  my($s, $v) = @_;
+  defined($v) ? ($s->{xpad} = $v) : $s->{xpad};
+}
+
+sub Varname {
+  my($s, $v) = @_;
+  defined($v) ? ($s->{anonpfx} = $v) : $s->{anonpfx};
+}
+
+sub Purity {
+  my($s, $v) = @_;
+  defined($v) ? ($s->{purity} = $v) : $s->{purity};
+}
+
 1;
 __END__
 
@@ -310,18 +347,24 @@ eval
 
     use Data::Dumper;
 
-    # simple usage
+    # simple procedural interface
     print Dumper($foo, $bar);
 
     # extended usage with names
     print Data::Dumper->Dump([$foo, $bar], [qw(foo *ary)]);
+
+    # configuration variables
+    {
+      local $Data::Dump::Purity = 1;
+      eval Data::Dumper->Dump([$foo, $bar], [qw(foo *ary)]);
+    }
 
     # OO usage
     $d = Data::Dumper->new([$foo, $bar], [qw(foo *ary)]);
        ...
     print $d->Dump;
        ...
-    $Data::Dump::Purity = 1;
+    $d->Purity(1);
     eval $d->Dump;
 
 
@@ -336,12 +379,12 @@ structure. Bear in mind that a reference so created will not preserve
 pointer equalities with the original reference.
 
 Handles self-referential structures correctly.  Any references that are the
-same as one of those passed in will be marked C<$VARn>, and other duplicate
-references to substructures within C<$VARn> will be appropriately labeled
+same as one of those passed in will be marked C<$VARI<n>>, and other duplicate
+references to substructures within C<$VARI<n>> will be appropriately labeled
 using arrow notation.
 
 The default output of self-referential structures can be C<eval>ed, but the
-nested references to C<$VARn> will be undefined, since a recursive structure
+nested references to C<$VARI<n>> will be undefined, since a recursive structure
 cannot be constructed using one Perl statement.  You can set
 C<$Data::Dumper::Purity> to 1 to get additional statements that will
 correctly fill in these references.
@@ -351,37 +394,123 @@ user-specified names.  If a supplied name begins with a C<*>, the output
 will describe the dereferenced type of the supplied reference for hashes and
 arrays.
 
-Several styles of output are possible.  Style 0 spews output without any
-newlines, indentation, or spaces between list items.  It is the most compact
-format possible that can still be called valid perl.  Style 1 outputs a
-readable form with newlines but no fancy indentation (each level in the
-structure is simply indented by a fixed amount of whitespace).  Style 2 (the
-default) outputs a very readable form which takes into account the length of
-hash keys (so the hash values line up).  Style 3 is like style 2, but also
-annotates the elements of arrays with their index (but the comment is on its
-own line, so array output consumes twice the number of lines).
+Several styles of output are possible, all controlled by setting
+C<$Data::Dumper::Indent> or using the corresponding method name.  Style 0
+spews output without any newlines, indentation, or spaces between list
+items.  It is the most compact format possible that can still be called
+valid perl.  Style 1 outputs a readable form with newlines but no fancy
+indentation (each level in the structure is simply indented by a fixed
+amount of whitespace).  Style 2 (the default) outputs a very readable form
+which takes into account the length of hash keys (so the hash value lines
+up).  Style 3 is like style 2, but also annotates the elements of arrays
+with their index (but the comment is on its own line, so array output
+consumes twice the number of lines).
 
+
+=head2 Methods
+
+=over 4
+
+=item I<PACKAGE>->new(I<ARRAYREF [>, I<ARRAYREF]>)
+
+Returns a newly created C<Dumper> object.  The first argument is an
+anonymous array of values to be dumped.  The optional second argument is an
+anonymous array of names for the values.  The names need not have a leading
+C<$> sign, and must be comprised of alphanumeric characters.  You can begin
+a name with a C<*> to specify that the dereferenced type must be dumped
+instead of the reference itself.
+
+The prefix specified by C<$Data::Dumper::Varname> will be used with a
+numeric suffix if the name for a value is undefined.
+
+=item $I<OBJ>->Dump  I<or>  I<PACKAGE>->Dump(I<ARRAYREF [>, I<ARRAYREF]>)
+
+Returns the stringified form of the values stored in the object (preserving
+the order in which they were supplied to C<new>), subject to the
+configuration options below.
+
+The second form, for convenience, simply calls the C<new> method on its
+arguments before dumping the object immediately.
+
+=item $I<OBJ>->Seen(I<[HASHREF]>)
+
+Queries or adds to the internal table of already encountered references.
+You must use C<Reset> to explicitly clear the table if needed.  Such
+references are not dumped; instead, their names are inserted wherever they
+are to be dumped subsequently.
+
+Expects a anonymous hash of name => value pairs.  Same rules apply for names
+as in C<new>.  If no argument is supplied, will return the "seen" list of
+name => value pairs, in an array context.
+
+=item $I<OBJ>->Values(I<[ARRAYREF]>)
+
+Queries or replaces the internal array of values that will be dumped.
+
+=item $I<OBJ>->Names(I<[ARRAYREF]>)
+
+Queries or replaces the internal array of user supplied names for the values
+that will be dumped.
+
+=item $I<OBJ>->Reset
+
+Clears the internal table of "seen" references.
+
+=back
+
+=head2 Functions
+
+=over 4
+
+=item Dumper(I<LIST>)
+
+Returns the stringified form of the values in the list, subject to the
+configuration options below.  The values will be named C<$VARI<n>> in the
+output, where C<I<n>> is a numeric suffix.
+
+=back
+
+=head2 Configuration Variables/Methods
+
+Several configuration variables can be used to control the kind of output
+generated when using the procedural interface.  These variables are usually
+C<local>ized in a block so that other parts of the code are not affected by
+the change.  
+
+These variables determine the default state of the object created by calling
+the C<new> method, but cannot be used to alter the state of the object
+thereafter.  The equivalent method names should be used instead to query
+or set the internal state of the object.
+
+=over 4
+
+=item $Data::Dumper::Indent  I<or>  $I<OBJ>->Indent(I<[NEWVAL]>)
+
+Controls the style of indentation.  It can be set to 0, 1, 2 or 3.  2 is the
+default.
+
+=item $Data::Dumper::Purity  I<or>  $I<OBJ>->Purity(I<[NEWVAL]>)
+
+Controls the degree to which the output can be C<eval>ed to recreate the
+supplied reference structures.  Setting it to 1 will output additional perl
+statements that will correctly recreate nested references.  The default is
+0.
+
+=item $Data::Dumper::Pad  I<or>  $I<OBJ>->Pad(I<[NEWVAL]>)
+
+Specifies the string that will be prefixed to every line of the output.
+Empty string by default.
+
+=item $Data::Dumper::Varname  I<or>  $I<OBJ>->Varname(I<[NEWVAL]>)
+
+Contains the prefix to use for tagging variable names in the output. The
+default is "VAR".
+
+=back
 
 =head2 Exports
 
-C<Dumper>
-
-
-=head2 Configuration
-
-The module variable C<$Data::Dumper::Indent> controls the style of
-indentation.  It can be set to 0, 1, 2 or 3.  2 is the default.
-
-The module variable C<$Data::Dumper::Purity> controls the degree to which
-the output can be C<eval>ed to recreate the supplied reference structures.
-Setting it to 1 will output additional perl statements that will correctly
-recreate nested references.  The default is 0.
-
-The module variable C<$Data::Dumper::Pad> specifies the string that will be
-prefixed to every line of the output.  Empty string by default.
-
-The module variable C<$Data::Dumper::Varname> controls the prefix to use
-for tagging variable names in the output. The default is "VAR".
+=item Dumper
 
 
 =head1 EXAMPLE
@@ -427,10 +556,12 @@ for tagging variable names in the output. The default is "VAR".
     print Data::Dumper->Dump([$a, $b], [qw(*a b)]); # print as @a
     print Data::Dumper->Dump([$b, $a], [qw(*b a)]); # print as %b
 
-    $d = Data::Dumper->new([$a,$b], [qw(a b)]);
+    $d = Data::Dumper->new([$a,$b], [qw(a b)]);     # go OO
     $d->Seen({'*c' => $c});            # stash a ref without printing it
+    $d->Indent(3);
     print $d->Dump;
     $d->Reset;                         # empty the seen cache
+    $d->Purity(0);
     print $d->Dump;
 
 
@@ -442,13 +573,14 @@ will be remedied in time, with the arrival of prototypes in later versions
 of Perl.  For now, you need to use the extended usage form, and prepend the
 name with a C<*> to output it as a hash or array.
 
-C<Dumper> cheats with CODE references. If a code reference is encountered in
+C<Dumper> cheats with CODE references.  If a code reference is encountered in
 the structure being processed, an anonymous subroutine returning the perl
 string-interpolated representation of the original CODE reference will be
-inserted in its place. You can C<eval> the result, but bear in mind that the
-anonymous sub that gets created is a dummy placeholder. Someday, perl will
-have a switch to cache-on-demand the string representation of a compiled
-piece of code, I hope.
+inserted in its place, and a warning will be printed if C<Purity> is
+set.  You can C<eval> the result, but bear in mind that the anonymous sub
+that gets created is a dummy placeholder. Someday, perl will have a switch
+to cache-on-demand the string representation of a compiled piece of code, I
+hope.
 
 SCALAR objects have the wierdest looking C<bless> workaround.
 
@@ -464,7 +596,7 @@ modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-Version 1.22    22 Nov 1995
+Version 1.23    3 Dec 1995
 
 
 =head1 SEE ALSO
