@@ -1,14 +1,14 @@
 use ExtUtils::MakeMaker;
 use File::Copy qw();
-my $arg = shift || "";
+my $arg = $ARGV[0] || "";
 my($DOXS, $DONOXS);
-$DONOXS = 1 if	$arg =~ /^noxs/i	and
-		-f "MANIFEST.NOXSUB"	and
-		-f "Dumper.pm.NOXSUB";
-$DOXS 	= 1 if	$arg =~ /^xs/i		and
-		-f "MANIFEST.XSUB"	and
-		-f "Dumper.xs.XSUB"	and
-		-f "Dumper.pm.XSUB";
+$DONOXS = shift if	$arg =~ /^noxs/i	and
+			-f "MANIFEST.NOXSUB"	and
+			-f "Dumper.pm.NOXSUB";
+$DOXS 	= shift if	$arg =~ /^xs/i		and
+			-f "MANIFEST.XSUB"	and
+			-f "Dumper.xs.XSUB"	and
+			-f "Dumper.pm.XSUB";
 
 if ($DONOXS) {
     print STDERR "Disabling XS in sources...\n";

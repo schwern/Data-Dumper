@@ -1,7 +1,7 @@
 This is the README file for Data::Dumper, the Perl
 data-structure printing/stringification module.
 
-This is version 2.08.  See the CHANGES section below for details on
+This is version 2.081.  See the CHANGES section below for details on
 the new features and fixes in this release.
 
 Perl version 5.004 or later is required to build and use this module.
@@ -10,9 +10,8 @@ Perl version 5.004 or later is required to build and use this module.
 ---NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE---NOTE---
 |                                                                       |
 |  Hash keys are always quoted by default beginning this version.       |
-|  This causes harmless failure of MLDBM-1.24's testsuite.  Despite     |
-|  this, MLDBM will continue to work fine with this version of          |
-|  Data::Dumper.                                                        |
+|  This causes harmless failure of the testsuite in MLDBM-1.24.         |
+|  You may wish to install MLDBM-1.25 or later.                         |
 |                                                                       |
 ---NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE---NOTE---
 
@@ -57,8 +56,8 @@ either of these:
 
    a. If your platform has a C compiler AND is supported by xsubpp:
 
-   	 gzip -c -d Data-Dumper-2.08.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.08
+   	 gzip -c -d Data-Dumper-2.081.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.081
    	 perl Makefile.PL
    	 make test
    	 make install
@@ -66,8 +65,8 @@ either of these:
    b. If you have no C compiler OR if you don't want the XSUB extension 
       (no loss of functionality, only speed):
 
-   	 gzip -c -d Data-Dumper-2.08.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.08
+   	 gzip -c -d Data-Dumper-2.081.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.081
    	 perl Makefile.PL noxs                  # flips to non-xsub version
    	 make test
    	 make install
@@ -84,6 +83,10 @@ either of these:
 ---------------------------------------------------------------------
 CHANGES
 
+    2.081 (15 January 1998)
+            Minor release to fix Makefile.PL not accepting
+            MakeMaker args.
+ 
     2.08  (7 December 1997)
             Glob dumps don't output superflous 'undef' anymore.
 

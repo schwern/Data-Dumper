@@ -9,7 +9,7 @@
 
 package Data::Dumper;
 
-$VERSION = $VERSION = '2.08';
+$VERSION = $VERSION = '2.081';
 
 #$| = 1;
 
@@ -933,15 +933,14 @@ SCALAR objects have the weirdest looking C<bless> workaround.
 
 Gurusamy Sarathy        gsar@umich.edu
 
-Copyright (c) 1996-97 Gurusamy Sarathy. All rights reserved.
+Copyright (c) 1996-98 Gurusamy Sarathy. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
 =head1 VERSION
 
-Version 2.08    (7 December 1997)
-
+Version 2.081    (15 January 1998)
 
 =head1 SEE ALSO
 
