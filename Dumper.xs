@@ -524,7 +524,7 @@ SV	*sep;
 	    }
 	}
 	else {
-	    c = SvPV_force(val, i);
+	    c = SvPV(val, i);
 	    sv_grow(retval, SvCUR(retval)+3+2*i);
 	    r = SvPVX(retval)+SvCUR(retval);
 	    r[0] = '\'';

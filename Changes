@@ -6,6 +6,12 @@ HISTORY - public release history for Data::Dumper
 
 =over 8
 
+=item 2.06  (2 December 1996)
+
+Bugfix that was serious enough for new release--the bug cripples
+MLDBM.  Problem was "Attempt to modify readonly value..." failures
+that stemmed for a misguided SvPV_force() instead of a SvPV().)
+
 =item 2.05  (2 December 1996)
 
 Fixed the type mismatch that was causing Dumpxs test to fail
