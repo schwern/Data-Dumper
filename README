@@ -1,0 +1,20 @@
+This is the README file for Data::Dumper, the Perl
+data-structure printing/stringification module.
+
+Perl Version 5.001 or later is required.
+
+This module may be for you if you:
+
+   * are writing an application that must display perl data
+     structures (Dumper is being used in a perl debugger)
+
+   * want to store some data structures to disk, in either a
+     compact or perl readable format (Dumper outputs pure perl,
+     so you don't have to invent your own portable data format, or
+     parse it;  simply read the data back in with perl and eval() it) 
+
+See the embedded documentation in the module for details.
+
+Send comments and suggestions to gsar@umich.edu.
+
+ - Sarathy.
