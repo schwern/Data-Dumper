@@ -30,9 +30,17 @@ elsif ($DOXS) {
 }
 
 WriteMakefile(
-              NAME => "Data::Dumper",
-              DISTNAME => "Data-Dumper",
-	      PM => { 'Dumper.pm' => '$(INST_LIBDIR)/Dumper.pm' },
-              VERSION_FROM => 'Dumper.pm',
-              'dist' => {COMPRESS=>'gzip -9f', SUFFIX => 'gz'}
-             );
+	NAME		=> "Data::Dumper",
+	VERSION_FROM	=> 'Dumper.pm',
+	DISTNAME	=> 'Data-Dumper',
+	(
+	 $] > 5.00470 ?
+	 (INSTALLDIRS	=> 'perl') :
+	 ()
+	),
+	'dist'		=> {
+			     COMPRESS	=> 'gzip -9f',
+	      		     SUFFIX	=> 'gz',
+			   },
+	MAN3PODS	=> ' ',
+);

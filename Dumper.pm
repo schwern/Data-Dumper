@@ -9,7 +9,7 @@
 
 package Data::Dumper;
 
-$VERSION = $VERSION = '2.081';
+$VERSION = $VERSION = '2.09';
 
 #$| = 1;
 
@@ -37,6 +37,7 @@ $Freezer = "" unless defined $Freezer;
 $Toaster = "" unless defined $Toaster;
 $Deepcopy = 0 unless defined $Deepcopy;
 $Quotekeys = 1 unless defined $Quotekeys;
+$Bless = "bless" unless defined $Bless;
 #$Expdepth = 0 unless defined $Expdepth;
 #$Maxdepth = 0 unless defined $Maxdepth;
 
@@ -71,6 +72,7 @@ sub new {
              toaster	=> $Toaster,    # name of method to revive objects
              deepcopy	=> $Deepcopy,   # dont cross-ref, except to stop recursion
              quotekeys	=> $Quotekeys,  # quote hash keys
+             'bless'	=> $Bless,	# keyword to use for "bless"
 #	     expdepth   => $Expdepth,   # cutoff depth for explicit dumping
 #	     maxdepth	=> $Maxdepth,   # depth beyond which we give up
 	   };
@@ -263,7 +265,7 @@ sub _dump {
     $ipad = $s->{xpad} x $s->{level};
 
     if ($realpack) {          # we have a blessed ref
-      $out = 'bless( ';
+      $out = $s->{'bless'} . '( ';
       $blesspad = $s->{apad};
       $s->{apad} .= '       ' if ($s->{indent} >= 2);
     }
@@ -484,6 +486,11 @@ sub Deepcopy {
 sub Quotekeys {
   my($s, $v) = @_;
   defined($v) ? (($s->{quotekeys} = $v), return $s) : $s->{quotekeys};
+}
+
+sub Bless {
+  my($s, $v) = @_;
+  defined($v) ? (($s->{'bless'} = $v), return $s) : $s->{'bless'};
 }
 
 # put a string value in double quotes
@@ -763,6 +770,13 @@ Can be set to a boolean value to control whether hash keys are quoted.
 A false value will avoid quoting hash keys when it looks like a simple
 string.  Default is 1, which will always enclose hash keys in quotes.
 
+=item $Data::Dumper::Bless  I<or>  $I<OBJ>->Bless(I<[NEWVAL]>)
+
+Can be set to a string that specifies an alternative to the C<bless>
+builtin operator used to create objects.  A function with the specified
+name should exist, and should accept the same arguments as the builtin.
+Default is C<bless>.
+
 =back
 
 =head2 Exports
@@ -940,7 +954,7 @@ modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-Version 2.081    (15 January 1998)
+Version 2.09    (9 July 1998)
 
 =head1 SEE ALSO
 

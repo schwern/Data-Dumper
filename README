@@ -1,39 +1,113 @@
------BEGIN PGP SIGNED MESSAGE-----
+This is the README file for Data::Dumper, the Perl
+data-structure printing/stringification module.
 
-Friday, March 6, 1998
+This is version 2.09.  See the CHANGES section below for details on
+the new features and fixes in this release.
 
-This is the Data::Dumper module with shared libraries compiled for 
-MacPerl.  Shared libraries run only on PPC and CFM68K versions, not 
-non-CFM 68K versions.  For that, install the NOXSUB version also 
-contained in this archive.
+Perl version 5.004 or later is required to build and use this module.
 
-This was compiled with MPW and Codewarrior.  Passed all tests (this 
-time! ... thanks, Paul).  I have no 68K machine (even my Newton
-is RISC :) so I can't test the CFM68K version.  Let me know any 
-problems.
 
-Decompress macblib.sit.hqx and install the three files in "macblib".
-Installing into your site_perl directory is best:
+---NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE---NOTE---
+|                                                                       |
+|  Data-Dumper comes standard with perl from version 5.004_71.  This    |
+|  version is identical to the one found in the latest development      |
+|  release, 5.004_75.  You should install this if (and only if) your    |
+|  version of perl doesn't already come with it.                        |
+|                                                                       |
+|  Building the XSUB version *requires* a C compiler that groks ANSI    |
+|  prototypes.  You may install the non-XSUB version if you're not so   |
+|  lucky.  See the INSTALLATION section below.                          |
+|                                                                       |
+---NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE---NOTE---
 
-	{MACPERL}site_perl:Data:Dumper.pm
-	{MACPERL}site_perl:MacCFM68K:auto:Data:Dumper:Dumper
-	{MACPERL}site_perl:MacPPC:auto:Data:Dumper:Dumper
 
-Also read README.orig, the original README file for this distribution.
+You may find this module useful if you:
 
------BEGIN PGP SIGNATURE-----
-Version: PGPfreeware 5.0 for non-commercial use <http://www.pgp.com>
-Charset: noconv
+   * are writing an application that must display perl data
+     structures.
 
-iQCVAwUBNQBV3ChcZja3bnKtAQFW1gQAhQ43m5HfnDFGR5yrTUXRTUbB8YYrq7h2
-gKZ5q/NeZ2NiUU9geCM8J766DQovitMZMOTYnFMQCUqaajl2+YTQf0xqlC2HCQqg
-0n+UhB5o2Bd5oPRZecF63mzSPFgMrhgli1R7PP/4UB9xPPAMLGKXxu6PDiHfQ7j/
-WqX5h2kBAXA=
-=E3m2
------END PGP SIGNATURE-----
+   * want to store some data structures to disk, in either a
+     compact or perl readable format (Dumper outputs pure perl,
+     so you don't have to invent your own portable data format, or
+     parse it;  simply "do FILE" or read the data back in with 
+     perl and eval() it).  See the MLDBM module for an example of
+     one such use.
 
--- 
-Chris Nandor          mailto:pudge@pobox.com         http://pudge.net/
-%PGPKey=('B76E72AD',[1024,'0824 090B CE73 CA10  1FF7 7F13 8180 B6B6'])
-#==               New Book:  MacPerl: Power and Ease               ==#
-#==    Publishing Date: Early 1998. http://www.ptf.com/macperl/    ==#
+   * want a simple, yet powerful, persistence engine that can be
+     quickly integrated into your application, and is a breeze to
+     debug.
+
+   * want a facility to make copies of data, or quickly find
+     differences between data structures.
+
+Dumper can be efficient if you are on a system supported by MakeMaker
+and xsubpp, the perl extension building tools.  In this case, Dumper 
+will build a XSUB extension that will be much faster than its perl 
+counterpart (in my tests, about 4 to 5 times).  In either case, 
+you should be able to use this module without loss of functionality.
+
+See the embedded documentation in the module for more details.
+
+Comments and suggestions are always welcome.
+
+ - Sarathy.
+   gsar@umich.edu
+
+---------------------------------------------------------------------
+INSTALLATION
+
+Installation requires a functional Makemaker and perl 5.004 or later.  Do
+either of these:
+
+   a. If your platform has a C compiler AND is supported by xsubpp:
+
+   	 gzip -c -d Data-Dumper-2.09.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.09
+   	 perl Makefile.PL
+   	 make test
+   	 make install
+
+   b. If you have no C compiler OR if you don't want the XSUB extension 
+      (no loss of functionality, only speed):
+
+   	 gzip -c -d Data-Dumper-2.09.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.09
+   	 perl Makefile.PL noxs                  # flips to non-xsub version
+   	 make test
+   	 make install
+
+      If you decide to go back to compiling the XSUB extension after this,
+      just do:
+
+         make distclean
+   	 perl Makefile.PL xs                    # flips to non-xsub version
+         make test
+         make install
+
+---------------------------------------------------------------------
+CHANGES
+
+    2.09  (9 July 1998)
+            Implement $Data::Dumper::Bless, suggested by Mark Daku
+	    <daku@nortel.ca>.
+
+    2.081 (15 January 1998)
+            Minor release to fix Makefile.PL not accepting
+            MakeMaker args.
+ 
+    2.08  (7 December 1997)
+            Glob dumps don't output superflous 'undef' anymore.
+
+            Fixes from Gisle Aas <gisle@aas.no> to make Dumper()
+            work with overloaded strings in recent perls, and his
+            new testsuite.
+
+            require 5.004.
+
+            A separate flag to always quote hash keys (on by
+            default).
+
+            Recreating known CODE refs is now better supported.
+
+            Changed flawed constant SCALAR bless workaround.
+
