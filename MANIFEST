@@ -4,7 +4,6 @@ Dumper.xs
 MANIFEST
 Makefile.PL
 Todo
-ppport.h
 t/dumper.t
 t/overload.t
 t/pair.t

@@ -2,9 +2,6 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-#ifdef _NOT_CORE
-# include "ppport.h"
-#endif
 
 static I32 num_q (char *s, STRLEN slen);
 static I32 esc_q (char *dest, char *src, STRLEN slen);
@@ -17,7 +14,7 @@ static I32 DD_dump (pTHX_ SV *val, char *name, STRLEN namelen, SV *retval,
 		    I32 purity, I32 deepcopy, I32 quotekeys, SV *bless,
 		    I32 maxdepth, SV *sortkeys);
 
-#if (PERL_VERSION <= 6) /* Perl 5.6 and earlier */
+#if PERL_VERSION <= 6 /* Perl 5.6 and earlier */
 
 # ifdef EBCDIC
 #  define UNI_TO_NATIVE(ch) (((ch) > 255) ? (ch) : ASCII_TO_NATIVE(ch))
@@ -39,8 +36,7 @@ Perl_utf8_to_uvchr(pTHX_ U8 *s, STRLEN *retlen)
 #  define utf8_to_uvchr(a,b) Perl_utf8_to_uvchr(aTHX_ a,b)
 # endif
 
-
-#endif
+#endif /* PERL_VERSION <= 6 */
 
 /* Changes in 5.7 series mean that now IOK is only set if scalar is
    precisely integer but in 5.6 and earlier we need to do a more

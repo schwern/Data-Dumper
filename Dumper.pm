@@ -9,7 +9,7 @@
 
 package Data::Dumper;
 
-$VERSION = '2.12_02';
+$VERSION = '2.121';
 
 #$| = 1;
 
@@ -1222,7 +1222,7 @@ modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-Version 2.121  (Jul 20 2003)
+Version 2.121  (Aug 24 2003)
 
 =head1 SEE ALSO
 
