@@ -2,7 +2,9 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-#include "ppport.h"
+#ifdef _NOT_CORE
+# include "ppport.h"
+#endif
 
 static I32 num_q (char *s, STRLEN slen);
 static I32 esc_q (char *dest, char *src, STRLEN slen);
@@ -17,28 +19,34 @@ static I32 DD_dump (pTHX_ SV *val, char *name, STRLEN namelen, SV *retval,
 
 #if (PERL_VERSION <= 6) /* Perl 5.6 and earlier */
 
-#define UNI_TO_NATIVE(ch)        (ch)
+# ifdef EBCDIC
+#  define UNI_TO_NATIVE(ch) (((ch) > 255) ? (ch) : ASCII_TO_NATIVE(ch))
+# else
+#  define UNI_TO_NATIVE(ch) (ch)
+# endif
 
 UV
-utf8n_to_uvchr(pTHX_ U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
+Perl_utf8_to_uvchr(pTHX_ U8 *s, STRLEN *retlen)
 {
-    UV uv = utf8_to_uv(aTHX_ s, curlen, retlen, flags);
+    UV uv = utf8_to_uv(s, UTF8_MAXLEN, retlen,
+                    ckWARN(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY);
     return UNI_TO_NATIVE(uv);
 }
 
-UV
-utf8_to_uvchr(pTHX_ U8 *s, STRLEN *retlen)
-{
-    return utf8n_to_uvchr(aTHX_ s, UTF8_MAXLEN, retlen,
-                          ckWARN(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY);
-}
+# if !defined(PERL_IMPLICIT_CONTEXT)
+#  define utf8_to_uvchr	     Perl_utf8_to_uvchr
+# else
+#  define utf8_to_uvchr(a,b) Perl_utf8_to_uvchr(aTHX_ a,b)
+# endif
+
+
 #endif
 
 /* Changes in 5.7 series mean that now IOK is only set if scalar is
    precisely integer but in 5.6 and earlier we need to do a more
    complex test  */
 #if PERL_VERSION <= 6
-#define DD_is_integer(sv) (SvIOK(sv) && (SvIV(sv) == SvNV(sv) || SvUV(sv) == SvNV(sv)))
+#define DD_is_integer(sv) (SvIOK(sv) && (SvIsUV(val) ? SvUV(sv) == SvNV(sv) : SvIV(sv) == SvNV(sv)))
 #else
 #define DD_is_integer(sv) SvIOK(sv)
 #endif
