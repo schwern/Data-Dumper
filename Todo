@@ -8,14 +8,6 @@ The following functionality will be supported in the next few releases.
 
 =over 4
 
-=item $Data::Dumper::Useqq  I<or>  $I<OBJ>->Useqq(I<[NEWVAL]>)
-
-When set, enables the use of double quotes for representing string values.
-Whitespace other than space will be represented as C<[\n\t\r]>, "unsafe"
-characters will be backslashed, and unprintable characters will be output as
-quoted octal integers.  Since setting this variable imposes a performance
-penalty, the default is 0.
-
 =item $Data::Dumper::Freezer  I<or>  $I<OBJ>->Freezer(I<[NEWVAL]>)
 
 Can be set to the method name that you want Dumper to call before attempting
@@ -24,6 +16,7 @@ to stringify an object.  This method can alter the contents of the object
 in a different package.  The client is responsible for making sure the
 specified method can be called via the object, and that the object ends up
 containing only perl data types after the method has been called.
+(This will be added when 5.004, which has UNIVERSAL::isa, is released.)
 
 =item $Data::Dumper::Maxdepth I<or> $I<OBJ>->Maxdepth(I<NEWVAL>)
 

@@ -7,16 +7,16 @@ use Data::Dumper;
 
 $TNUM = 0;
 
-sub T { print "ok ", ++$TNUM, "\n" };
+sub T { my $t = shift; ++$TNUM; print $t ? "ok $TNUM\n" : "not ok $TNUM\n" };
 
 $TMAX = 2;
 if (defined &Data::Dumper::Dumpxs) {
   print "# XS extension loaded, will test XS versions\n";
-  $TMAX = 2; $XS = 1;
+  $TMAX = 4; $XS = 1;
 }
 else {
   print "# XS extensions not loaded, will not test them\n";
-  $TMAX = 1; $XS = 0;
+  $TMAX = 2; $XS = 0;
 }
 
 print "1..$TMAX\n";
@@ -45,8 +45,15 @@ $d->Indent(3);
 $d->Reset;                         # empty the seen cache
 $d->Purity(0);
 $out .= $d->Dump;
-$out .= Data::Dumper::Dumper($a);
-#print $out;
+$out .= Dumper($a);
+
+{
+  local $Data::Dumper::Purity = 0;
+  local $Data::Dumper::Terse = 1;
+  $out .= Dumper($a);
+#  print $out;
+}
+
 $want = <<'EOT';
 $a = [
        1,
@@ -135,10 +142,36 @@ $VAR1 = [
 $VAR1->[1]{'a'} = $VAR1;
 $VAR1->[1]{'b'} = $VAR1->[1];
 $VAR1->[2] = $VAR1->[1]{'c'};
+[
+  1,
+  {
+    a => $VAR1,
+    b => $VAR1->[1],
+    c => [
+      'c'
+    ]
+  },
+  $VAR1->[1]{c}
+]
 EOT
 
-&T if $out eq $want;
+T($out eq $want);
 
+$foo = { "abc\000\efg" => "mno\000" };
+{
+  local $Data::Dumper::Useqq = 1;
+  $out = Dumper($foo);
+#  print $out;
+}
+
+$want = <<'EOT';
+$VAR1 = {
+  "abc\000\efg" => "mno\000"
+};
+EOT
+
+T($out eq $want);
+  
 $wantxs = <<'EOT';
 $a = [
   1,
@@ -201,20 +234,20 @@ $a->[1]{'c'} = \@c;
 $a->[2] = \@c;
 $b = $a->[1];
 $a = [
-       #0
-       1,
-       #1
-       {
-         'a' => $a,
-         'b' => $a->[1],
-         'c' => [
-                  #0
-                  'c'
-                ]
-       },
-       #2
-       $a->[1]{'c'}
-     ];
+  #0
+  1,
+  #1
+  {
+    'a' => $a,
+    'b' => $a->[1],
+    'c' => [
+             #0
+             'c'
+           ]
+  },
+  #2
+  $a->[1]{'c'}
+];
 $b = $a->[1];
 $VAR1 = [
   1,
@@ -230,6 +263,17 @@ $VAR1 = [
 $VAR1->[1]{'a'} = $VAR1;
 $VAR1->[1]{'b'} = $VAR1->[1];
 $VAR1->[2] = $VAR1->[1]{'c'};
+[
+  1,
+  {
+    'a' => $VAR1,
+    'b' => $VAR1->[1],
+    'c' => [
+      'c'
+    ]
+  },
+  $VAR1->[1]{'c'}
+]
 EOT
 
 if ($XS) {
@@ -248,6 +292,28 @@ if ($XS) {
   $d->Purity(0);
   $out .= $d->Dumpxs;
   $out .= Data::Dumper::DumperX($a);
+
+  {
+    local $Data::Dumper::Purity = 0;
+    local $Data::Dumper::Terse = 1;
+    $out .= Data::Dumper::DumperX($a);
+  }
 #  print $out;
-  &T if $wantxs eq $out;
+  T($wantxs eq $out);
+
+  {
+    local $Data::Dumper::Useqq = 1;
+    $out = Data::Dumper::DumperX($foo);
+#    print $out;
+  }
+
+  $wantxs = <<"EOT";
+\$VAR1 = {
+  'abc\000\efg' => 'mno\000'
+};
+EOT
+
+#  print $wantxs;
+
+  T($out eq $wantxs);
 }

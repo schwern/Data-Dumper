@@ -8,19 +8,19 @@ extern "C" {
 }
 #endif
 
-static long num_q _((char *s));
-static long esc_q _((char *dest, char *src));
+static I32 num_q _((char *s));
+static I32 esc_q _((char *dest, char *src, STRLEN slen));
 static SV *sv_x _((char *str, STRLEN len, I32 n));
-static int DD_dump _((SV *val, char *name, long namelen, SV *retval,
-		      HV *seenhv, AV *postav, long *levelp, long indent,
-		      SV *xpad, SV *pad, SV *apad, SV *sep, long purity));
+static I32 DD_dump _((SV *val, char *name, STRLEN namelen, SV *retval,
+		      HV *seenhv, AV *postav, I32 *levelp, I32 indent,
+		      SV *xpad, SV *pad, SV *apad, SV *sep, I32 purity));
 
 /* count the number of "'"s and "\"s in string */
-static long
+static I32
 num_q(s)
 register char *s;
 {
-    register long ret = 0;
+    register I32 ret = 0;
     
     while (*s) {
 	if (*s == '\'' || *s == '\\')
@@ -32,34 +32,32 @@ register char *s;
 
 
 /* returns number of chars added to escape "'"s and "\"s in s */
-static long
-esc_q(d, s)
+/* slen number of characters in s will be escaped */
+/* destination must be long enough for additional chars */
+static I32
+esc_q(d, s, slen)
 register char *d;
 register char *s;
+register STRLEN slen;
 {
-    register int ret = 0;
+    register I32 ret = 0;
     
-REPEAT:
-    while (*s && *s != '\'' && *s != '\\') {
-	*d = *s;
-	++d; ++s;
-    }
-    switch (*s) {
-    case '\'':
-    case '\\':
-	*d = '\\';
-	++d;
-	*d = *s;
-	++d; ++s; ++ret;
-	goto REPEAT;
-    case '\0':
-	*d = '\0';
-	break;
+    while (slen > 0) {
+	switch (*s) {
+	case '\'':
+	case '\\':
+	    *d = '\\';
+	    ++d; ++ret;
+	default:
+	    *d = *s;
+	    ++d; ++s; --slen;
+	    break;
+	}
     }
     return ret;
 }
 
-/* makes SV with a repeated string when passed a string */
+/* makes a new SV with a repeated string when passed a string */
 static SV *
 sv_x(str, len, n)
 register char *str;
@@ -84,12 +82,25 @@ I32 n;
  * it exactly parallels the perl version, which was one long thing for
  * efficiency raisins.
  */
-static int
-DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
-	long *levelp, long indent, SV *xpad, SV *pad, SV *apad, SV *sep, long purity)
+static I32
+DD_dump(val, name, namelen, retval, seenhv, postav,
+	levelp, indent, xpad, pad, apad, sep, purity)
+SV	*val;
+char	*name;
+STRLEN	namelen;
+SV	*retval;
+HV	*seenhv;
+AV	*postav;
+I32	*levelp;
+I32	indent;
+SV	*xpad;
+SV	*pad;
+SV	*apad;
+SV	*sep;
+I32	purity;
 {
     char tmpbuf[128];
-    I32 i;
+    U32 i;
     char *c, *r, *realpack, *id = tmpbuf;
     SV **svp;
     SV *sv;
@@ -97,7 +108,7 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
     SV *ipad;
     SV *ival;
     char *iname;
-    long inamelen;
+    STRLEN inamelen;
     U32 flags;
     U32 realtype;
 
@@ -119,7 +130,7 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	ival = SvRV(val);
 	flags = SvFLAGS(ival);
 	realtype = SvTYPE(ival);
-        (void) sprintf(id, "0x%lx", (unsigned long)ival);
+        (void) sprintf(id, "0x%lx", (U32)ival);
 	i = strlen(id);
 	if (SvOBJECT(ival))
 	    realpack = HvNAME(SvSTASH(ival));
@@ -170,9 +181,9 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 		namesv = newSVpv(name, namelen);
 	    seenentry = newAV();
 	    av_push(seenentry, namesv);
-	    SvREFCNT_inc(val);
+	    (void)SvREFCNT_inc(val);
 	    av_push(seenentry, val);
-	    hv_store(seenhv, id, strlen(id), newRV((SV*)seenentry), 0);
+	    (void)hv_store(seenhv, id, strlen(id), newRV((SV*)seenentry), 0);
 	    SvREFCNT_dec(seenentry);
 	}
 	
@@ -207,8 +218,8 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	}
 	else if (realtype == SVt_PVAV) {
 	    SV *totpad;
-	    long ix = 0;
-	    long ixmax = av_len((AV *)ival);
+	    I32 ix = 0;
+	    I32 ixmax = av_len((AV *)ival);
 	    
 	    SV *ixsv = newSViv(0);
 	    /* allowing for a 24 char wide array index */
@@ -221,7 +232,7 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	    }
 	    else
 		sv_catpvn(retval, "[", 1);
-	    if (name[namelen-1] != ']' && name[namelen-1] != '}') {
+	    if (namelen > 0 && name[namelen-1] != ']' && name[namelen-1] != '}') {
 		iname[inamelen++] = '-'; iname[inamelen++] = '>';
 	    }
 	    iname[inamelen++] = '['; iname[inamelen] = '\0';
@@ -230,7 +241,7 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	    sv_catsv(totpad, apad);
 
 	    for (ix = 0; ix <= ixmax; ++ix) {
-		long ilen;
+		STRLEN ilen;
 		SV *elem;
 		svp = av_fetch((AV*)ival, ix, FALSE);
 		if (svp)
@@ -275,7 +286,7 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	    SV *iname, *sname;
 	    HE *entry;
 	    char *key;
-	    long klen;
+	    I32 klen;
 	    SV *hval;
 	    
 	    iname = newSVpv(name, namelen);
@@ -285,7 +296,7 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	    }
 	    else
 		sv_catpvn(retval, "{", 1);
-	    if (name[namelen-1] != ']' && name[namelen-1] != '}') {
+	    if (namelen > 0 && name[namelen-1] != ']' && name[namelen-1] != '}') {
 		sv_catpvn(iname, "->", 2);
 	    }
 	    sv_catpvn(iname, "{", 1);
@@ -297,7 +308,7 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	    i = 0;
 	    while ((entry = hv_iternext((HV*)ival)))  {
 		char *nkey;
-		long nticks = 0;
+		I32 nticks = 0;
 		
 		if (i)
 		    sv_catpvn(retval, ",", 1);
@@ -308,13 +319,12 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 		nticks = num_q(key);
 		New(0, nkey, klen+nticks+3, char);
 		nkey[0] = '\'';
-		++klen;
 		if (nticks)
-		    klen += esc_q(nkey+1, key);
+		    klen += esc_q(nkey+1, key, klen);
 		else
-		    (void)strcpy(nkey+1, key);
-		nkey[klen++] = '\'';
-		nkey[klen] = '\0';
+		    (void)Copy(key, nkey+1, klen, char);
+		nkey[++klen] = '\'';
+		nkey[++klen] = '\0';
 
 		sname = newSVsv(iname);
 		sv_catpvn(sname, nkey, klen);
@@ -326,7 +336,7 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 		sv_catpvn(retval, " => ", 4);
 		if (indent >= 2) {
 		    char *extra;
-		    long elen = 0;
+		    I32 elen = 0;
 		    newapad = newSVsv(apad);
 		    New(0, extra, klen+4+1, char);
 		    while (elen < (klen+4))
@@ -359,8 +369,8 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	    SvREFCNT_dec(totpad);
 	}
 	else if (realtype == SVt_PVCV) {
-            int len;
-	    (void) sprintf(tmpbuf, "sub { 'CODE(0x%lx)' }", (unsigned long)ival);
+            STRLEN len;
+	    (void) sprintf(tmpbuf, "sub { 'CODE(0x%lx)' }", (U32)ival);
             len = strlen(tmpbuf);
 	    sv_catpvn(retval, tmpbuf, len);
 	    if (purity)
@@ -389,7 +399,7 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	STRLEN i;
 	
 	if (SvIOK(val)) {
-            int len;
+            STRLEN len;
 	    i = SvIV(val);
             (void) sprintf(tmpbuf, "%d", i);
             len = strlen(tmpbuf);
@@ -399,11 +409,12 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 	else if (SvOK(val)) {
 	    if (realtype == SVt_PVGV) { /* GLOBs can end up with scribbly names */
 		c = SvPV(val, i);
+		++c; --i;		/* just get the name */
 		sv_grow(retval, SvCUR(retval)+5+2*i);
 		r = SvPVX(retval)+SvCUR(retval);
 		r[0] = '*'; r[1] = '{';	r[2] = '\'';
+		i += esc_q(r+3, c, i);
 		i += 3;
-		i += esc_q(r+3, c+1);
 		r[i++] = '\''; r[i++] = '}';
 		r[i] = '\0';
 	    }
@@ -412,8 +423,8 @@ DD_dump(SV *val, char *name, long namelen, SV *retval, HV *seenhv, AV *postav,
 		sv_grow(retval, SvCUR(retval)+3+2*i);
 		r = SvPVX(retval)+SvCUR(retval);
 		r[0] = '\'';
+		i += esc_q(r+1, c, i);
 		++i;
-		i += esc_q(r+1, c);
 		r[i++] = '\'';
 		r[i] = '\0';
 	    }
@@ -431,7 +442,10 @@ MODULE = Data::Dumper		PACKAGE = Data::Dumper         PREFIX = Data_Dumper_
 
 #
 # This is the exact equivalent of Dump.  Well, almost. The things that are
-# different: hash keys are always quoted; GLOBs are always dumped in curlies.
+# different as of now (due to Laziness):
+#   * hash keys are always quoted
+#   * GLOBs are always dumped in curlies.
+#   * indentation doesnt take into account any leading VARnn string
 #
 # Doesnt leak, as far as I can tell from tests. 
 #
@@ -443,14 +457,15 @@ Data_Dumper_Dumpxs(href, ...)
 	PPCODE:
 	{
 	    HV *hv;
-	    SV *retval;
+	    SV *retval, *valstr;
 	    HV *seenhv = Nullhv;
 	    AV *postav, *todumpav, *namesav;
-	    long level = 0;
-	    long indent, purity, i, imax, postlen;
+	    I32 level = 0;
+	    I32 indent, terse, useqq, purity, i, imax, postlen;
 	    SV **svp;
 	    SV *val, *name, *xpad, *pad, *apad, *sep, *tmp, *anonpfx;
 	    char tmpbuf[1024];
+	    I32 gimme = GIMME;
 
 	    if (!SvROK(href)) {		/* call new to get an object first */
 		SV *valarray;
@@ -485,50 +500,59 @@ Data_Dumper_Dumpxs(href, ...)
 	    todumpav = namesav = Nullav;
 	    seenhv = Nullhv;
 	    val = name = xpad = pad = apad = sep = tmp = anonpfx = &sv_undef;
+	    indent = 2;
+	    terse = useqq = purity = 0;
 	    
 	    retval = newSVpv("", 0);
-	    if (SvROK(href)) {
-		hv = (HV*)SvRV((SV*)href);
-		if (SvTYPE(hv) == SVt_PVHV) {
-		    if ((svp = hv_fetch(hv, "seen", 4, FALSE)) && SvROK(*svp))
-			seenhv = (HV*)SvRV(*svp);
-		    if ((svp = hv_fetch(hv, "todump", 6, FALSE)) && SvROK(*svp))
-			todumpav = (AV*)SvRV(*svp);
-		    if ((svp = hv_fetch(hv, "names", 5, FALSE)) && SvROK(*svp))
-			namesav = (AV*)SvRV(*svp);
-		    if ((svp = hv_fetch(hv, "indent", 6, FALSE)))
-			indent = SvIV(*svp);
-		    if ((svp = hv_fetch(hv, "purity", 6, FALSE)))
-			purity = SvIV(*svp);
-		    if ((svp = hv_fetch(hv, "xpad", 4, FALSE)))
-			xpad = *svp;
-		    if ((svp = hv_fetch(hv, "pad", 3, FALSE)))
-			pad = *svp;
-		    if ((svp = hv_fetch(hv, "apad", 4, FALSE)))
-			apad = *svp;
-		    if ((svp = hv_fetch(hv, "sep", 3, FALSE)))
-			sep = *svp;
-		    if ((svp = hv_fetch(hv, "anonpfx", 7, FALSE)))
-			anonpfx = *svp;
-		    postav = newAV();
+	    if (SvROK(href)
+		&& (hv = (HV*)SvRV((SV*)href))
+		&& SvTYPE(hv) == SVt_PVHV)		{
 
-		    if (todumpav)
-			imax = av_len(todumpav);
+		if ((svp = hv_fetch(hv, "seen", 4, FALSE)) && SvROK(*svp))
+		    seenhv = (HV*)SvRV(*svp);
+		if ((svp = hv_fetch(hv, "todump", 6, FALSE)) && SvROK(*svp))
+		    todumpav = (AV*)SvRV(*svp);
+		if ((svp = hv_fetch(hv, "names", 5, FALSE)) && SvROK(*svp))
+		    namesav = (AV*)SvRV(*svp);
+		if ((svp = hv_fetch(hv, "indent", 6, FALSE)))
+		    indent = SvIV(*svp);
+		if ((svp = hv_fetch(hv, "purity", 6, FALSE)))
+		    purity = SvIV(*svp);
+		if ((svp = hv_fetch(hv, "terse", 5, FALSE)))
+		    terse = SvIV(*svp);
+		if ((svp = hv_fetch(hv, "useqq", 5, FALSE)))
+		    useqq = SvIV(*svp);
+		if ((svp = hv_fetch(hv, "xpad", 4, FALSE)))
+		    xpad = *svp;
+		if ((svp = hv_fetch(hv, "pad", 3, FALSE)))
+		    pad = *svp;
+		if ((svp = hv_fetch(hv, "apad", 4, FALSE)))
+		    apad = *svp;
+		if ((svp = hv_fetch(hv, "sep", 3, FALSE)))
+		    sep = *svp;
+		if ((svp = hv_fetch(hv, "anonpfx", 7, FALSE)))
+		    anonpfx = *svp;
+		postav = newAV();
+
+		if (todumpav)
+		    imax = av_len(todumpav);
+		else
+		    imax = -1;
+		valstr = newSVpv("",0);
+		for (i = 0; i <= imax; ++i) {
+		    av_clear(postav);
+		    if ((svp = av_fetch(todumpav, i, FALSE)))
+			val = *svp;
 		    else
-			imax = -1;
-		    for (i = 0; i <= imax; ++i) {
-			av_clear(postav);
-			if ((svp = av_fetch(todumpav, i, FALSE)))
-			    val = *svp;
-			else
-			    val = &sv_undef;
-			if ((svp = av_fetch(namesav, i, TRUE)))
-			    name = *svp;
-			else
-			    name = &sv_undef;
-			
-			if (SvOK(name)) {
-			    if ((SvPVX(name))[0] == '*' && SvROK(val)) {
+			val = &sv_undef;
+		    if ((svp = av_fetch(namesav, i, TRUE)))
+			name = *svp;
+		    else
+			name = &sv_undef;
+		    
+		    if (SvOK(name)) {
+			if ((SvPVX(name))[0] == '*') {
+			    if (SvROK(val)) {
 				switch (SvTYPE(SvRV(val))) {
 				case SVt_PVAV:
 				    (SvPVX(name))[0] = '@';
@@ -541,29 +565,41 @@ Data_Dumper_Dumpxs(href, ...)
 				    break;
 				}
 			    }
-			    else if ((SvPVX(name))[0] != '$')
-				sv_insert(name, 0, 0, "$", 1);
+			    else
+				(SvPVX(name))[0] = '$';
 			}
-			else {
-			    int nchars = 0;
-			    sv_setpvn(name, "$", 1);
-			    sv_catsv(name, anonpfx);
-			    (void) sprintf(tmpbuf, "%ld", i+1);
-                            nchars = strlen(tmpbuf);
-			    sv_catpvn(name, tmpbuf, nchars);
-			}
-			if (indent >= 2)
-			    apad = sv_x(" ", 1, SvCUR(name)+3);
+			else if ((SvPVX(name))[0] != '$')
+			    sv_insert(name, 0, 0, "$", 1);
+		    }
+		    else {
+			STRLEN nchars = 0;
+			sv_setpvn(name, "$", 1);
+			sv_catsv(name, anonpfx);
+			(void) sprintf(tmpbuf, "%ld", i+1);
+			nchars = strlen(tmpbuf);
+			sv_catpvn(name, tmpbuf, nchars);
+		    }
+		    
+		    DD_dump(val, SvPVX(name), SvCUR(name), valstr, seenhv, postav,
+			    &level, indent, xpad, pad, apad, sep, purity);
+		    postlen = av_len(postav);
+		    if (terse && postlen < 0) {
+			sv_catsv(retval, xpad);
+			sv_catsv(retval, valstr);
+			sv_catsv(retval, sep);
+		    }
+		    else {
+			/* XXX need to implement this */
+			/*if (indent >= 2)
+			    apad = sv_x(" ", 1, SvCUR(name)+3); */
 			sv_catsv(retval, xpad);
 			sv_catsv(retval, name);
 			sv_catpvn(retval, " = ", 3);
-			DD_dump(val, SvPVX(name), SvCUR(name), retval, seenhv, postav,
-				&level, indent, xpad, pad, apad, sep, purity);
+			sv_catsv(retval, valstr);
 			sv_catpvn(retval, ";", 1);
 			sv_catsv(retval, sep);
-			if ((postlen = av_len(postav)) >= 0) {
-			    long i;
-			    
+			if (postlen >= 0) {
+			    I32 i;
 			    sv_catsv(retval, xpad);
 			    for (i = 0; i <= postlen; ++i) {
 				SV *elem;
@@ -580,14 +616,21 @@ Data_Dumper_Dumpxs(href, ...)
 			    sv_catpvn(retval, ";", 1);
 			    sv_catsv(retval, sep);
 			}
-			    
-			if (indent >= 2)
-			    SvREFCNT_dec(apad);
+			/* if (indent >= 2)
+			    SvREFCNT_dec(apad); */
 		    }
-		    SvREFCNT_dec(postav);
+		    sv_setpvn(valstr, "", 0);
+		    if (gimme == G_ARRAY) {
+			XPUSHs(sv_2mortal(retval));
+			if (i < imax)	/* not the last time thro ? */
+			    retval = newSVpv("",0);
+		    }
 		}
+		SvREFCNT_dec(postav);
+		SvREFCNT_dec(valstr);
 	    }
-	    XPUSHs(sv_2mortal(retval));
+	    else
+		croak("Call to new() method failed to return HASH ref");
+	    if (gimme == G_SCALAR)
+		XPUSHs(sv_2mortal(retval));
 	}
-
-    

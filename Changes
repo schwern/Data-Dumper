@@ -1,10 +1,36 @@
 =head1 NAME
 
-HISTORY - release history for Data::Dumper
+HISTORY - public release history for Data::Dumper
 
 =head1 DESCRIPTION
 
 =over 8
+
+=item 2.03beta  (26 August 1996)
+
+Fixed Dumpxs.  It was appending trailing nulls to globnames.
+(reported by Randal Schwartz <merlyn@teleport.com>).
+
+Calling the C<Indent()> method on a dumper object now correctly
+resets the internal separator (reported by Curt Tilmes
+<curt@ltpmail.gsfc.nasa.gov>).
+
+New C<Terse> option to suppress the 'C<VARI<n> = >' prefix 
+introduced.  If the option is set, they are output only when
+absolutely essential.
+
+The C<Useqq> flag is supported (but not by the XSUB version
+yet).
+
+Embedded nulls in keys are now handled properly by Dumpxs.
+
+Dumper.xs now use various integer types in perl.h (should
+make it compile without noises on 64 bit platforms, although
+I haven't been able to test this).
+
+All the dump methods now return a list of strings in a list
+context.
+
 
 =item 2.02beta  (13 April 1996)
 
