@@ -6,6 +6,21 @@ HISTORY - public release history for Data::Dumper
 
 =over 8
 
+=item 2.08  (7 December 1997)
+
+Glob dumps don't output superflous 'undef' anymore.
+
+Fixes from Gisle Aas <gisle@aas.no> to make Dumper() work with
+overloaded strings in recent perls, and his new testsuite.
+
+require 5.004.
+
+A separate flag to always quote hash keys (on by default).
+
+Recreating known CODE refs is now better supported.
+
+Changed flawed constant SCALAR bless workaround.
+
 =item 2.07  (7 December 1996)
 
 Dumpxs output is now exactly the same as Dump.  It still doesn't
@@ -43,7 +58,8 @@ the method call that will revive the frozen object.
 The C<Deepcopy> flag has been added to do just that.
 
 Dumper does more aggressive cataloging of SCALARs encountered
-within ARRAY/HASH structures.
+within ARRAY/HASH structures. Thanks to Norman Gaywood 
+<norm@godel.une.edu.au> for reporting the problem.
 
 Objects that C<overload> the '""' operator are now handled
 properly by the C<Dump> method.

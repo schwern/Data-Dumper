@@ -1,11 +1,21 @@
 This is the README file for Data::Dumper, the Perl
 data-structure printing/stringification module.
 
-This is Version 2.07.  See the "Changes" file for details on
+This is version 2.08.  See the CHANGES section below for details on
 the new features and fixes in this release.
 
-Perl Version 5.002 or later is required, if you wish to compile
-the XSUB extension.  Otherwise, 5.001 should suffice.
+Perl version 5.004 or later is required to build and use this module.
+
+
+---NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE---NOTE---
+|                                                                       |
+|  Hash keys are always quoted by default beginning this version.       |
+|  This causes harmless failure of MLDBM-1.24's testsuite.  Despite     |
+|  this, MLDBM will continue to work fine with this version of          |
+|  Data::Dumper.                                                        |
+|                                                                       |
+---NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE----NOTE---NOTE---
+
 
 You may find this module useful if you:
 
@@ -42,46 +52,51 @@ Comments and suggestions are always welcome.
 ---------------------------------------------------------------------
 INSTALLATION
 
-Do either 1a, or 1b, or 2.
+Installation requires a functional Makemaker and perl 5.004 or later.  Do
+either of these:
 
-1. If your platform is supported by MakeMaker (most UNIX platforms and others):
+   a. If your platform has a C compiler AND is supported by xsubpp:
 
-   a. If your platform has a C compiler AND is supported by xsubpp AND you 
-      have perl version 5.002 or later:
-
-   	 zcat Data-Dumper-2.07.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.07
+   	 gzip -c -d Data-Dumper-2.08.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.08
    	 perl Makefile.PL
-   	 make test                              # this will run 40 tests
+   	 make test
    	 make install
 
    b. If you have no C compiler OR if you don't want the XSUB extension 
-      OR you're running some version > 5.001 but not quite 5.002 (no loss of 
-      functionality, only speed):
+      (no loss of functionality, only speed):
 
-   	 zcat Data-Dumper-2.07.tar.gz | tar xvf -
-   	 cd Data-Dumper-2.07
-         ./flip                                 # flips to non-xsub version
-   	 perl Makefile.PL
-   	 make test                              # this will run 20 tests
+   	 gzip -c -d Data-Dumper-2.08.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.08
+   	 perl Makefile.PL noxs                  # flips to non-xsub version
+   	 make test
    	 make install
-
-      If the "perl Makefile.PL" step fails due to very old MakeMaker, you can
-      simply copy Dumper.pm to your $PERL5LIB/Data/  directory.
 
       If you decide to go back to compiling the XSUB extension after this,
       just do:
 
          make distclean
-         ./flip                                 # flips back to xsub version
-         perl Makefile.PL
+   	 perl Makefile.PL xs                    # flips to non-xsub version
          make test
          make install
 
-2. If your platform is NOT supported by MakeMaker: (Win(%, WinNT)
 
-         Extract the tar file after gunzipping it.
+---------------------------------------------------------------------
+CHANGES
 
-         Simply copy the file Dumper.pm.NOXSUB to 
-         "$YOUR_PERL_LIB_DIR/Data/Dumper.pm".  That's it.
+    2.08  (7 December 1997)
+            Glob dumps don't output superflous 'undef' anymore.
+
+            Fixes from Gisle Aas <gisle@aas.no> to make Dumper()
+            work with overloaded strings in recent perls, and his
+            new testsuite.
+
+            require 5.004.
+
+            A separate flag to always quote hash keys (on by
+            default).
+
+            Recreating known CODE refs is now better supported.
+
+            Changed flawed constant SCALAR bless workaround.
 

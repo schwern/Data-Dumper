@@ -9,13 +9,14 @@
 
 package Data::Dumper;
 
-$VERSION = $VERSION = '2.07';
+$VERSION = $VERSION = '2.08';
 
 #$| = 1;
 
-require 5.002;
+require 5.004;
 require Exporter;
 require DynaLoader;
+require overload;
 
 use Carp;
 
@@ -35,6 +36,7 @@ $Terse = 0 unless defined $Terse;
 $Freezer = "" unless defined $Freezer;
 $Toaster = "" unless defined $Toaster;
 $Deepcopy = 0 unless defined $Deepcopy;
+$Quotekeys = 1 unless defined $Quotekeys;
 #$Expdepth = 0 unless defined $Expdepth;
 #$Maxdepth = 0 unless defined $Maxdepth;
 
@@ -68,6 +70,7 @@ sub new {
              freezer	=> $Freezer,    # name of Freezer method for objects
              toaster	=> $Toaster,    # name of method to revive objects
              deepcopy	=> $Deepcopy,   # dont cross-ref, except to stop recursion
+             quotekeys	=> $Quotekeys,  # quote hash keys
 #	     expdepth   => $Expdepth,   # cutoff depth for explicit dumping
 #	     maxdepth	=> $Maxdepth,   # depth beyond which we give up
 	   };
@@ -88,11 +91,12 @@ sub Seen {
     my($k, $v, $id);
     while (($k, $v) = each %$g) {
       if (defined $v and ref $v) {
-	($id) = ("$v" =~ /\((.*)\)$/);
+	($id) = (overload::StrVal($v) =~ /\((.*)\)$/);
 	if ($k =~ /^[*](.*)$/) {
 	  $k = (ref $v eq 'ARRAY') ? ( "\\\@" . $1 ) :
-	    (ref $v eq 'HASH') ? ( "\\\%" . $1 ) :
-	      ("\$" . $1 );
+	       (ref $v eq 'HASH')  ? ( "\\\%" . $1 ) :
+	       (ref $v eq 'CODE')  ? ( "\\\&" . $1 ) :
+				     (   "\$" . $1 ) ;
 	}
 	elsif ($k !~ /^\$/) {
 	  $k = "\$" . $k;
@@ -103,6 +107,7 @@ sub Seen {
 	carp "Only refs supported, ignoring non-ref item \$$k";
       }
     }
+    return $s;
   }
   else {
     return map { @$_ } values %{$s->{seen}};
@@ -116,6 +121,7 @@ sub Values {
   my($s, $v) = @_;
   if (defined($v) && (ref($v) eq 'ARRAY'))  {
     $s->{todump} = [@$v];        # make a copy
+    return $s;
   }
   else {
     return @{$s->{todump}};
@@ -129,6 +135,7 @@ sub Names {
   my($s, $n) = @_;
   if (defined($n) && (ref($n) eq 'ARRAY'))  {
     $s->{names} = [@$n];         # make a copy
+    return $s;
   }
   else {
     return @{$s->{names}};
@@ -157,8 +164,9 @@ sub Dump {
       if ($name =~ /^[*](.*)$/) {
 	if (defined $val) {
 	  $name = (ref $val eq 'ARRAY') ? ( "\@" . $1 ) :
-	    (ref $val eq 'HASH') ? ( "\%" . $1 ) :
-	      ("\$" . $1 );
+		  (ref $val eq 'HASH')  ? ( "\%" . $1 ) :
+		  (ref $val eq 'CODE')  ? ( "\*" . $1 ) :
+					  ( "\$" . $1 ) ;
 	}
 	else {
 	  $name = "\$" . $1;
@@ -215,23 +223,16 @@ sub _dump {
       }
     }
 
-    if (exists $ {$type . "::OVERLOAD"}{'""'}) {
-      # let's hope this is harmless
-      bless $val, "Dumper::FAKE";
-      ($realpack, $realtype, $id) = ("$val" =~ /^(?:(.*)\=)?([^=]*)\(([^\(]*)\)$/);
-      bless $val, $type;
-      $realpack = $type;
-    }
-    else {
-      ($realpack, $realtype, $id) = ("$val" =~ /^(?:(.*)\=)?([^=]*)\(([^\(]*)\)$/);
-    }
+    ($realpack, $realtype, $id) =
+      (overload::StrVal($val) =~ /^(?:(.*)\=)?([^=]*)\(([^\(]*)\)$/);
     
     # keep a tab on it so that we dont fall into recursive pit
     if (exists $s->{seen}{$id}) {
 #     if ($s->{expdepth} < $s->{level}) {
       if ($s->{purity} and $s->{level} > 0) {
-	$out = ($realtype eq 'HASH') ? '{}' :
-	  ($realtype eq 'ARRAY') ? '[]' : "''";
+	$out = ($realtype eq 'HASH')  ? '{}' :
+	       ($realtype eq 'ARRAY') ? '[]' :
+					"''" ;
 	  push @post, $name . " = " . $s->{seen}{$id}[0];
       }
       else {
@@ -251,7 +252,11 @@ sub _dump {
     }
     else {
       # store our name
-      $s->{seen}{$id} = [ ($name =~ /^[@%].*$/) ? ('\\' . $name ) : $name, $val ];
+      $s->{seen}{$id} = [ (($name =~ /^[@%]/)     ? ('\\' . $name ) :
+			   ($realtype eq 'CODE' and
+			    $name =~ /^[*](.*)$/) ? ('\\&' . $1 )   :
+						     $name          ),
+			  $val ];
     }
 
     $s->{level}++;
@@ -265,7 +270,7 @@ sub _dump {
     
     if ($realtype eq 'SCALAR') {
       if ($realpack) {
-	$out .= '\\' . '($_ = ' . $s->_dump($$val, "") . ')';
+	$out .= 'do{\\(my $o = ' . $s->_dump($$val, "") . ')}';
       }
       else {
 	$out .= '\\' . $s->_dump($$val, "");
@@ -301,7 +306,7 @@ sub _dump {
       $mname .= '->' if $mname =~ /^\*.+\{[A-Z]+\}$/;
       while (($k, $v) = each %$val) {
 	my $nk = $s->_dump($k, "");
-	$nk = $1 if !$s->{purity} and $nk =~ /^[\"\']([A-Za-z_][\w:]*)[\"\']$/;
+	$nk = $1 if !$s->{quotekeys} and $nk =~ /^[\"\']([A-Za-z_]\w*)[\"\']$/;
 	$sname = $mname . '{' . $nk . '}';
 	$out .= $pad . $ipad . $nk . " => ";
 
@@ -414,6 +419,7 @@ sub Dumpp { print Data::Dumper->Dump(@_) }
 sub Reset {
   my($s) = shift;
   $s->{seen} = {};
+  return $s;
 }
 
 sub Indent {
@@ -428,48 +434,56 @@ sub Indent {
       $s->{sep} = "\n";
     }
     $s->{indent} = $v;
+    return $s;
   }
-  return $s->{indent};
+  else {
+    return $s->{indent};
+  }
 }
 
 sub Pad {
   my($s, $v) = @_;
-  defined($v) ? ($s->{pad} = $v) : $s->{pad};
+  defined($v) ? (($s->{pad} = $v), return $s) : $s->{pad};
 }
 
 sub Varname {
   my($s, $v) = @_;
-  defined($v) ? ($s->{varname} = $v) : $s->{varname};
+  defined($v) ? (($s->{varname} = $v), return $s) : $s->{varname};
 }
 
 sub Purity {
   my($s, $v) = @_;
-  defined($v) ? ($s->{purity} = $v) : $s->{purity};
+  defined($v) ? (($s->{purity} = $v), return $s) : $s->{purity};
 }
 
 sub Useqq {
   my($s, $v) = @_;
-  defined($v) ? ($s->{useqq} = $v) : $s->{useqq};
+  defined($v) ? (($s->{useqq} = $v), return $s) : $s->{useqq};
 }
 
 sub Terse {
   my($s, $v) = @_;
-  defined($v) ? ($s->{terse} = $v) : $s->{terse};
+  defined($v) ? (($s->{terse} = $v), return $s) : $s->{terse};
 }
 
 sub Freezer {
   my($s, $v) = @_;
-  defined($v) ? ($s->{freezer} = $v) : $s->{freezer};
+  defined($v) ? (($s->{freezer} = $v), return $s) : $s->{freezer};
 }
 
 sub Toaster {
   my($s, $v) = @_;
-  defined($v) ? ($s->{toaster} = $v) : $s->{toaster};
+  defined($v) ? (($s->{toaster} = $v), return $s) : $s->{toaster};
 }
 
 sub Deepcopy {
   my($s, $v) = @_;
-  defined($v) ? ($s->{deepcopy} = $v) : $s->{deepcopy};
+  defined($v) ? (($s->{deepcopy} = $v), return $s) : $s->{deepcopy};
+}
+
+sub Quotekeys {
+  my($s, $v) = @_;
+  defined($v) ? (($s->{quotekeys} = $v), return $s) : $s->{quotekeys};
 }
 
 # put a string value in double quotes
@@ -519,9 +533,7 @@ Data::Dumper - stringified perl data structures, suitable for both printing and 
        ...
     print $d->Dump;
        ...
-    $d->Purity(1);
-    $d->Terse(1);
-    $d->Deepcopy(1);
+    $d->Purity(1)->Terse(1)->Deepcopy(1);
     eval $d->Dump;
 
 
@@ -529,31 +541,35 @@ Data::Dumper - stringified perl data structures, suitable for both printing and 
 
 Given a list of scalars or reference variables, writes out their contents in
 perl syntax. The references can also be objects.  The contents of each
-variable is output in a single Perl statement.
+variable is output in a single Perl statement.  Handles self-referential
+structures correctly.
 
-The return value can be C<eval>ed to get back the original reference
-structure. Bear in mind that a reference so created will not preserve
-pointer equalities with the original reference.
+The return value can be C<eval>ed to get back an identical copy of the
+original reference structure.
 
-Handles self-referential structures correctly.  Any references that are the
-same as one of those passed in will be marked C<$VAR>I<n> (where I<n> is a
-numeric suffix), and other duplicate references to substructures within 
-C<$VAR>I<n> will be appropriately labeled using arrow notation.  You can
-specify names for individual values to be dumped if you use the C<Dump()>
-method, or you can change the default C<$VAR> prefix to something else.  See
-L<$Data::Dumper::Varname> and L<$Data::Dumper::Terse> below.
+Any references that are the same as one of those passed in will be named
+C<$VAR>I<n> (where I<n> is a numeric suffix), and other duplicate references
+to substructures within C<$VAR>I<n> will be appropriately labeled using arrow
+notation.  You can specify names for individual values to be dumped if you
+use the C<Dump()> method, or you can change the default C<$VAR> prefix to
+something else.  See C<$Data::Dumper::Varname> and C<$Data::Dumper::Terse>
+below.
 
 The default output of self-referential structures can be C<eval>ed, but the
 nested references to C<$VAR>I<n> will be undefined, since a recursive
-structure cannot be constructed using one Perl statement.  You can set the
+structure cannot be constructed using one Perl statement.  You should set the
 C<Purity> flag to 1 to get additional statements that will correctly fill in
 these references.
 
 In the extended usage form, the references to be dumped can be given
 user-specified names.  If a name begins with a C<*>, the output will 
 describe the dereferenced type of the supplied reference for hashes and
-arrays.  Output of names will be avoided where possible if the C<Terse>
-flag is set.
+arrays, and coderefs.  Output of names will be avoided where possible if
+the C<Terse> flag is set.
+
+In many cases, methods that are used to set the internal state of the
+object will return the object itself, so method calls can be conveniently
+chained together.
 
 Several styles of output are possible, all controlled by setting
 the C<Indent> flag.  See L<Configuration Variables or Methods> below 
@@ -604,24 +620,30 @@ above, only about 4 to 5 times faster, since it is written entirely in C.
 Queries or adds to the internal table of already encountered references.
 You must use C<Reset> to explicitly clear the table if needed.  Such
 references are not dumped; instead, their names are inserted wherever they
-are encountered subsequently.
+are encountered subsequently.  This is useful especially for properly
+dumping subroutine references.
 
 Expects a anonymous hash of name => value pairs.  Same rules apply for names
 as in C<new>.  If no argument is supplied, will return the "seen" list of
-name => value pairs, in an array context.
+name => value pairs, in an array context.  Otherwise, returns the object
+itself.
 
 =item I<$OBJ>->Values(I<[ARRAYREF]>)
 
 Queries or replaces the internal array of values that will be dumped.
+When called without arguments, returns the values.  Otherwise, returns the
+object itself.
 
 =item I<$OBJ>->Names(I<[ARRAYREF]>)
 
 Queries or replaces the internal array of user supplied names for the values
-that will be dumped.
+that will be dumped.  When called without arguments, returns the names.
+Otherwise, returns the object itself.
 
 =item I<$OBJ>->Reset
 
-Clears the internal table of "seen" references.
+Clears the internal table of "seen" references and returns the object
+itself.
 
 =back
 
@@ -655,6 +677,9 @@ These variables determine the default state of the object created by calling
 the C<new> method, but cannot be used to alter the state of the object
 thereafter.  The equivalent method names should be used instead to query
 or set the internal state of the object.
+
+The method forms return the object itself when called with arguments,
+so that they can be chained together nicely.
 
 =over 4
 
@@ -732,14 +757,23 @@ Can be set to a boolean value to enable deep copies of structures.
 Cross-referencing will then only be done when absolutely essential
 (i.e., to break reference cycles).  Default is 0.
 
+=item $Data::Dumper::Quotekeys  I<or>  $I<OBJ>->Quotekeys(I<[NEWVAL]>)
+
+Can be set to a boolean value to control whether hash keys are quoted.
+A false value will avoid quoting hash keys when it looks like a simple
+string.  Default is 1, which will always enclose hash keys in quotes.
+
 =back
 
 =head2 Exports
 
+=over 4
+
 =item Dumper
 
+=back
 
-=head1 EXAMPLE
+=head1 EXAMPLES
 
 Run these code snippets to get a quick feel for the behavior of this
 module.  When you are through with these examples, you may want to
@@ -789,7 +823,6 @@ distribution for more examples.)
     # recursive structures
     ########
     
-    
     @c = ('c');
     $c = \@c;
     $b = {};
@@ -817,20 +850,17 @@ distribution for more examples.)
     # object-oriented usage
     ########
     
-    
     $d = Data::Dumper->new([$a,$b], [qw(a b)]);
     $d->Seen({'*c' => $c});            # stash a ref without printing it
     $d->Indent(3);
     print $d->Dump;
-    $d->Reset;                         # empty the seen cache
-    $d->Purity(0);
+    $d->Reset->Purity(0);              # empty the seen cache
     print join "----\n", $d->Dump;
     
     
     ########
     # persistence
     ########
-    
     
     package Foo;
     sub new { bless { state => 'awake' }, shift }
@@ -851,14 +881,26 @@ distribution for more examples.)
     
     package Foo;
     use Data::Dumper;
-    my $a = Foo->new;
-    my $b = Data::Dumper->new([$a], ['c']);
+    $a = Foo->new;
+    $b = Data::Dumper->new([$a], ['c']);
     $b->Freezer('Freeze');
     $b->Toaster('Thaw');
-    my $c = $b->Dump;
+    $c = $b->Dump;
     print $c;
-    my $d = eval $c;
+    $d = eval $c;
     print Data::Dumper->Dump([$d], ['d']);
+    
+    
+    ########
+    # symbol substitution (useful for recreating CODE refs)
+    ########
+    
+    sub foo { print "foo speaking\n" }
+    *other = \&foo;
+    $bar = [ \&other ];
+    $d = Data::Dumper->new([\&other,$bar],['*other','bar']);
+    $d->Seen({ '*foo' => \&foo });
+    print $d->Dump;
 
 
 =head1 BUGS
@@ -875,7 +917,11 @@ contains the string '"DUMMY"' will be inserted in its place, and a warning
 will be printed if C<Purity> is set.  You can C<eval> the result, but bear
 in mind that the anonymous sub that gets created is just a placeholder.
 Someday, perl will have a switch to cache-on-demand the string
-representation of a compiled piece of code, I hope.
+representation of a compiled piece of code, I hope.  If you have prior
+knowledge of all the code refs that your data structures are likely
+to have, you can use the C<Seen> method to pre-seed the internal reference
+table and make the dumped output point to them, instead.  See L<EXAMPLES>
+above.
 
 The C<Useqq> flag is not honored by C<Dumpxs()> (it always outputs
 strings in single quotes).
@@ -887,14 +933,14 @@ SCALAR objects have the weirdest looking C<bless> workaround.
 
 Gurusamy Sarathy        gsar@umich.edu
 
-Copyright (c) 1996 Gurusamy Sarathy. All rights reserved.
+Copyright (c) 1996-97 Gurusamy Sarathy. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 
 =head1 VERSION
 
-Version 2.07    (7 December 1996)
+Version 2.08    (7 December 1997)
 
 
 =head1 SEE ALSO

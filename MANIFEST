@@ -4,9 +4,9 @@ MANIFEST.NOXSUB
 Changes
 Todo
 Makefile.PL
-flip
 Dumper.pm
 Dumper.pm.NOXSUB
 Dumper.xs
 Dumper.html
 t/dumper.t
+t/overload.t

@@ -22,4 +22,11 @@ where we don't care so much for cross-references).
 
 =item Make C<Dumpxs()> honor C<$Useqq>
 
+=item Fix formatting when Terse is set and Indent >= 2
+
+=item Output space after '\' (ref constructor) for high enough Indent
+
+=item Implement redesign that allows various backends (Perl, Lisp,
+some-binary-data-format, graph-description-languages, etc.)
+
 =back

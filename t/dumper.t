@@ -30,11 +30,11 @@ sub TEST {
 
 if (defined &Data::Dumper::Dumpxs) {
   print "### XS extension loaded, will run XS tests\n";
-  $TMAX = 120; $XS = 1;
+  $TMAX = 138; $XS = 1;
 }
 else {
   print "### XS extensions not loaded, will NOT run XS tests\n";
-  $TMAX = 60; $XS = 0;
+  $TMAX = 69; $XS = 0;
 }
 
 print "1..$TMAX\n";
@@ -56,16 +56,16 @@ $WANT = <<'EOT';
 #$a = [
 #       1,
 #       {
-#         a => $a,
-#         b => $a->[1],
-#         c => [
-#                'c'
-#              ]
+#         'a' => $a,
+#         'b' => $a->[1],
+#         'c' => [
+#                  'c'
+#                ]
 #       },
-#       $a->[1]{c}
+#       $a->[1]{'c'}
 #     ];
 #$b = $a->[1];
-#$c = $a->[1]{c};
+#$c = $a->[1]{'c'};
 EOT
 
 TEST q(Data::Dumper->Dump([$a,$b,$c], [qw(a b c)]));
@@ -175,7 +175,7 @@ $WANT = <<'EOT';
 EOT
 
 $d->Indent(3);
-$d->Purity(0);
+$d->Purity(0)->Quotekeys(0);
 TEST q( $d->Reset; $d->Dump );
 
 TEST q( $d->Reset; $d->Dumpxs ) if $XS;
@@ -220,6 +220,7 @@ EOT
 
 {
   local $Data::Dumper::Purity = 0;
+  local $Data::Dumper::Quotekeys = 0;
   local $Data::Dumper::Terse = 1;
   TEST q(Dumper($a));
   TEST q(Data::Dumper::DumperX($a)) if $XS;
@@ -397,6 +398,7 @@ EOT
 EOT
 
   $Data::Dumper::Purity = 0;
+  $Data::Dumper::Quotekeys = 0;
   TEST q(Data::Dumper->Dump([\\*foo, \\@foo, \\%foo], ['*foo', '*bar', '*baz']));
   TEST q(Data::Dumper->Dumpxs([\\*foo, \\@foo, \\%foo], ['*foo', '*bar', '*baz'])) if $XS;
 
@@ -525,9 +527,9 @@ EOT
   
 ############# 109
 ##
-  TEST q($d->Reset; $d->Dump);
+  TEST q($d->Reset->Dump);
   if ($XS) {
-    TEST q($d->Reset; $d->Dumpxs);
+    TEST q($d->Reset->Dumpxs);
   }
 
 ############# 115
@@ -549,13 +551,56 @@ EOT
 
   TEST q(
 	 $d = Data::Dumper->new( [\@dogs, \%kennel], [qw(*dogs *kennels)] );
-	 $d->Deepcopy(1);
-	 $d->Dump;
+	 $d->Deepcopy(1)->Dump;
 	);
   if ($XS) {
-    TEST q($d->Reset;$d->Dumpxs);
+    TEST q($d->Reset->Dumpxs);
   }
   
 }
 
+{
 
+sub a { print "foo\n" }
+$c = [ \&a ];
+
+############# 121
+##
+  $WANT = <<'EOT';
+#$a = $b;
+#$c = [
+#  $b
+#];
+EOT
+
+TEST q(Data::Dumper->new([\&a,$c],['a','c'])->Seen({'b' => \&a})->Dump;);
+TEST q(Data::Dumper->new([\&a,$c],['a','c'])->Seen({'b' => \&a})->Dumpxs;)
+	if $XS;
+
+############# 127
+##
+  $WANT = <<'EOT';
+#$a = \&b;
+#$c = [
+#  \&b
+#];
+EOT
+
+TEST q(Data::Dumper->new([\&a,$c],['a','c'])->Seen({'*b' => \&a})->Dump;);
+TEST q(Data::Dumper->new([\&a,$c],['a','c'])->Seen({'*b' => \&a})->Dumpxs;)
+	if $XS;
+
+############# 133
+##
+  $WANT = <<'EOT';
+#*a = \&b;
+#@c = (
+#  \&b
+#);
+EOT
+
+TEST q(Data::Dumper->new([\&a,$c],['*a','*c'])->Seen({'*b' => \&a})->Dump;);
+TEST q(Data::Dumper->new([\&a,$c],['*a','*c'])->Seen({'*b' => \&a})->Dumpxs;)
+	if $XS;
+
+}
