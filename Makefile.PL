@@ -1,10 +1,8 @@
-use lib "./lib";
-require Data::Dumper;
 use ExtUtils::MakeMaker;
 WriteMakefile(
               NAME => "Data::Dumper",
               DISTNAME => "Data-Dumper",
-              VERSION => $Data::Dumper::VERSION,
-              'dist' => {COMPRESS=>'gzip -9f', SUFFIX => 'gz'},
-              'macro' => {CONFIGDEP => 'lib/Data/Dumper.pm'}
+	      PM => { 'Dumper.pm' => '$(INST_LIBDIR)/Dumper.pm' },
+              VERSION => '2.00',
+              'dist' => {COMPRESS=>'gzip -9f', SUFFIX => 'gz'}
              );

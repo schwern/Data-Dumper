@@ -9,17 +9,21 @@
 
 package Data::Dumper;
 
-$VERSION = $VERSION = '1.23';
+$VERSION = $VERSION = '2.00';
 
 #$| = 1;
 
-require 5.001;
+require 5.002;
 require Exporter;
+require DynaLoader;
+
 use Carp;
 
-@ISA = qw(Exporter);
+@ISA = qw(Exporter DynaLoader);
 @EXPORT = qw(Dumper);
-#@EXPORT_OK = qw(Dumper);
+@EXPORT_OK = qw(DumperX);
+
+bootstrap Data::Dumper;
 
 # module vars and their defaults
 $Indent = 2 unless defined $Indent;
@@ -36,7 +40,7 @@ $Varname = "VAR" unless defined $Varname;
 sub new {
   my($c, $v, $n) = @_;
 
-  die "Usage:  PACKAGE->new(ARRAYREF, [ARRAYREF])" 
+  croak "Usage:  PACKAGE->new(ARRAYREF, [ARRAYREF])" 
     unless (defined($v) && (ref($v) eq 'ARRAY'));
   $n = [] unless (defined($n) && (ref($v) eq 'ARRAY'));
 
@@ -120,6 +124,8 @@ sub Names {
     return @{$s->{names}};
   }
 }
+
+sub DESTROY {}
 
 #
 # dump the refs in the current dumper object.
@@ -209,18 +215,7 @@ sub _dump {
       $s->{apad} .= '       ' if ($s->{indent} >= 2);
     }
     
-    if ($realtype eq 'REF') {
-      if ($realpack) {
-	  $out .= '\\' . '($_ = ' . $s->_dump($$val, "\$$name") . ')';
-      }
-      else {
-	$out .= '\\' . $s->_dump($$val, "\$$name");
-      }
-    }
-    elsif ($realtype eq 'GLOB') {
-      $out .= '\\' . "$$val";
-    }
-    elsif ($realtype eq 'SCALAR') {
+    if ($realtype eq 'SCALAR' or $realtype eq 'GLOB') {
       if ($realpack) {
 	$out .= '\\' . '($_ = ' . $s->_dump($$val, "\$$name") . ')';
       }
@@ -252,7 +247,8 @@ sub _dump {
       ($name =~ /^\%(.*)$/) ? ($mname = "\$" . $1) : 
 	($name =~ /[]}]$/) ? ($mname = $name) : ($mname = $name . '->');
       while (($k, $v) = each %$val) {
-	$k = '\'' . $k . '\'' if $k =~ s/([\\\'])/\\$1/g or $k =~ /[\W]|^$/;
+	$k = '\'' . $k . '\'' if $k =~ s/([\\\'])/\\$1/g or 
+                                 $k =~ /[\W\d]|^$/ or $s->{purity};
 	$sname = $mname . '{' . $k . '}'; 
 	$out .= $pad . $ipad . $k . " => ";
 
@@ -273,7 +269,7 @@ sub _dump {
       carp "Encountered CODE ref, using dummy placeholder" if $s->{purity};
     }
     else {
-      die "Can\'t handle $realtype type.";
+      croak "Can\'t handle $realtype type.";
     }
     
     if ($realpack) { # we have a blessed ref
@@ -283,8 +279,14 @@ sub _dump {
     $s->{level}--;
   }
   else {                                 # simple scalar
-    if ($val =~ /^-?\d{1,8}$/ || ref(\$val) eq 'GLOB') {
-      $out .= $val;                      # safe number or glob
+    if ($val =~ /^-?[1-9]\d{1,8}$/) {    # safe decimal number
+      $out .= $val;
+    }
+    elsif (ref(\$val) eq 'GLOB') {       # glob
+      $sname = substr($val, 1);
+      $sname = '{\'' . $sname . '\'}' 
+	if $sname =~ s/([\\\'])/\\$1/g or $sname =~ /[^:\w]|^$/;
+      $out .= '*' . $sname;
     }
     else {
       $val =~ s/([\\\'])/\\$1/g;
@@ -300,6 +302,13 @@ sub _dump {
 #
 sub Dumper {
   return Data::Dumper->Dump([@_]);
+}
+
+#
+# same, only calls the XS version
+#
+sub DumperX {
+  return Data::Dumper->Dumpxs([@_], []);
 }
 
 sub Dumpf { return Data::Dumper->Dump(@_) }
@@ -389,9 +398,9 @@ cannot be constructed using one Perl statement.  You can set
 C<$Data::Dumper::Purity> to 1 to get additional statements that will
 correctly fill in these references.
 
-In the extended usage form, the supplied references can be given
-user-specified names.  If a supplied name begins with a C<*>, the output
-will describe the dereferenced type of the supplied reference for hashes and
+In the extended usage form, the references to be dumped can be given
+user-specified names.  If a name begins with a C<*>, the output will 
+describe the dereferenced type of the supplied reference for hashes and
 arrays.
 
 Several styles of output are possible, all controlled by setting
@@ -432,6 +441,12 @@ configuration options below.
 The second form, for convenience, simply calls the C<new> method on its
 arguments before dumping the object immediately.
 
+=item $I<OBJ>->Dumpxs  I<or>  I<PACKAGE>->Dumpxs(I<ARRAYREF [>, I<ARRAYREF]>)
+
+This method is available if you were able to compile and install the XSUB
+extension to C<Data::Dumper>. It is exactly identical to the C<Dump> method 
+above, only about 4 to 5 times faster, since it is written entirely in C.
+
 =item $I<OBJ>->Seen(I<[HASHREF]>)
 
 Queries or adds to the internal table of already encountered references.
@@ -467,6 +482,13 @@ Clears the internal table of "seen" references.
 Returns the stringified form of the values in the list, subject to the
 configuration options below.  The values will be named C<$VARI<n>> in the
 output, where C<I<n>> is a numeric suffix.
+
+=item DumperX(I<LIST>)
+
+Identical to the C<Dumper> function above, but this calls the XSUB 
+implementation, and is therefore about 3 to 4 times faster.  Only available
+if you were able to compile and install the XSUB extensions in 
+C<Data::Dumper>.
 
 =back
 
@@ -596,7 +618,7 @@ modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-Version 1.23    3 Dec 1995
+Version 2.00beta    9 April 1996
 
 
 =head1 SEE ALSO

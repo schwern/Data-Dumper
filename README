@@ -1,7 +1,11 @@
 This is the README file for Data::Dumper, the Perl
 data-structure printing/stringification module.
 
-Perl Version 5.001 or later is required.
+This is Version 2.00(beta).
+
+Perl Version 5.002 or later is required, if you wish to compile
+the XSUB extension.  Otherwise, 5.001 will suffice  (5.002 is 
+strongly recommended, if it is available for your platform).
 
 You may find this module useful if you:
 
@@ -11,10 +15,14 @@ You may find this module useful if you:
    * want to store some data structures to disk, in either a
      compact or perl readable format (Dumper outputs pure perl,
      so you don't have to invent your own portable data format, or
-     parse it;  simply read the data back in with perl and eval() it).
+     parse it;  simply "do FILE" or read the data back in with 
+     perl and eval() it).
 
-The 'eg' directory contains a trivial module I wrote to store
-multidimensional structures in DBM files.
+Dumper can be efficient if you are on a system supported by MakeMaker
+and xsubpp, the perl extension building tools.  In this case, Dumper 
+will build a XSUB extension that will be much faster than its perl 
+counterpart (in my tests, about 4 to 5 times).  In either case, 
+you should be able to use this module without loss of functionality.
 
 See the embedded documentation in the module for more details.
 
@@ -22,3 +30,50 @@ Comments and suggestions are always welcome.
 
  - Sarathy.
    gsar@umich.edu
+
+---------------------------------------------------------------------
+INSTALLATION
+
+Do either 1a, or 1b, or 2.
+
+1. If your platform is supported by MakeMaker (most UNIX platforms and others):
+
+   a. If your platform has a C compiler AND is supported by xsubpp AND you 
+      have perl version 5.002 or later:
+
+   	 zcat Data-Dumper-2.00.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.00
+   	 perl Makefile.PL
+   	 make test                              # this will run TWO tests
+   	 make install
+
+   b. If you have no C compiler OR if you don't want the XSUB extension 
+      OR you're running some version > 5.001 but not quite 5.002 (no loss of 
+      functionality, only speed):
+
+   	 zcat Data-Dumper-2.00.tar.gz | tar xvf -
+   	 cd Data-Dumper-2.00
+         ./flip                                 # flips to non-xsub version
+   	 perl Makefile.PL
+   	 make test                              # this will run ONE test
+   	 make install
+
+      If the "perl Makefile.PL" step fails due to very old MakeMaker, you can
+      simply copy Dumper.pm to your $PERL5LIB/Data/  directory.
+
+      If you decide to go back to compiling the XSUB extension after this,
+      just do:
+
+         make distclean
+         ./flip                                 # flips back to xsub version
+         perl Makefile.PL
+         make test
+         make install
+
+2. If your platform is NOT supported by MakeMaker: (Win(%, WinNT)
+
+         Extract the tar file after gunzipping it.
+
+         Simply copy the file Dumper.pm.NOXSUB to 
+         "$YOUR_PERL_LIB_DIR/Data/Dumper.pm".  That's it.
+

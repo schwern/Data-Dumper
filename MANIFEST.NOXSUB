@@ -1,11 +1,11 @@
 README
 MANIFEST
-MANIFEST.NOXSUB
+MANIFEST.XSUB
 Changes
 Todo
 Makefile.PL
 flip
 Dumper.pm
-Dumper.pm.NOXSUB
-Dumper.xs
+Dumper.pm.XSUB
+Dumper.xs.XSUB
 t/dumper.t
