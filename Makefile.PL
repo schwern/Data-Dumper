@@ -1,3 +1,4 @@
+use 5.006001;
 use ExtUtils::MakeMaker;
 WriteMakefile(
 	NAME		=> "Data::Dumper",
@@ -8,4 +9,5 @@ WriteMakefile(
 	      		     DIST_DEFAULT => 'all tardist',
 			   },
 	MAN3PODS	=> {},
+        DEFINE            => '-DUSE_PPPORT_H',
 );

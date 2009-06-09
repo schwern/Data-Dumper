@@ -1,9 +1,11 @@
 Changes
 Dumper.pm
 Dumper.xs
-MANIFEST
 Makefile.PL
-Todo
+MANIFEST			This list of files
+META.yml
+ppport.h
 t/dumper.t
 t/overload.t
 t/pair.t
+Todo

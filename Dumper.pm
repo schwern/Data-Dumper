@@ -9,41 +9,50 @@
 
 package Data::Dumper;
 
-$VERSION = '2.121';
+$VERSION = '2.122';
 
 #$| = 1;
 
 use 5.006_001;
 require Exporter;
-use XSLoader ();
 require overload;
 
 use Carp;
 
-@ISA = qw(Exporter);
-@EXPORT = qw(Dumper);
-@EXPORT_OK = qw(DumperX);
+BEGIN {
+    @ISA = qw(Exporter);
+    @EXPORT = qw(Dumper);
+    @EXPORT_OK = qw(DumperX);
 
-XSLoader::load 'Data::Dumper';
+    # if run under miniperl, or otherwise lacking dynamic loading,
+    # XSLoader should be attempted to load, or the pure perl flag
+    # toggled on load failure.
+    eval {
+	require XSLoader;
+    };
+    $Useperl = 1 if $@;
+}
+
+XSLoader::load( 'Data::Dumper' ) unless $Useperl;
 
 # module vars and their defaults
-$Indent = 2 unless defined $Indent;
-$Purity = 0 unless defined $Purity;
-$Pad = "" unless defined $Pad;
-$Varname = "VAR" unless defined $Varname;
-$Useqq = 0 unless defined $Useqq;
-$Terse = 0 unless defined $Terse;
-$Freezer = "" unless defined $Freezer;
-$Toaster = "" unless defined $Toaster;
-$Deepcopy = 0 unless defined $Deepcopy;
-$Quotekeys = 1 unless defined $Quotekeys;
-$Bless = "bless" unless defined $Bless;
-#$Expdepth = 0 unless defined $Expdepth;
-$Maxdepth = 0 unless defined $Maxdepth;
-$Pair = ' => ' unless defined $Pair;
-$Useperl = 0 unless defined $Useperl;
-$Sortkeys = 0 unless defined $Sortkeys;
-$Deparse = 0 unless defined $Deparse;
+$Indent     = 2         unless defined $Indent;
+$Purity     = 0         unless defined $Purity;
+$Pad        = ""        unless defined $Pad;
+$Varname    = "VAR"     unless defined $Varname;
+$Useqq      = 0         unless defined $Useqq;
+$Terse      = 0         unless defined $Terse;
+$Freezer    = ""        unless defined $Freezer;
+$Toaster    = ""        unless defined $Toaster;
+$Deepcopy   = 0         unless defined $Deepcopy;
+$Quotekeys  = 1         unless defined $Quotekeys;
+$Bless      = "bless"   unless defined $Bless;
+#$Expdepth   = 0         unless defined $Expdepth;
+$Maxdepth   = 0         unless defined $Maxdepth;
+$Pair       = ' => '    unless defined $Pair;
+$Useperl    = 0         unless defined $Useperl;
+$Sortkeys   = 0         unless defined $Sortkeys;
+$Deparse    = 0         unless defined $Deparse;
 
 #
 # expects an arrayref of values to be dumped.
@@ -56,7 +65,7 @@ sub new {
 
   croak "Usage:  PACKAGE->new(ARRAYREF, [ARRAYREF])" 
     unless (defined($v) && (ref($v) eq 'ARRAY'));
-  $n = [] unless (defined($n) && (ref($v) eq 'ARRAY'));
+  $n = [] unless (defined($n) && (ref($n) eq 'ARRAY'));
 
   my($s) = { 
              level      => 0,           # current recursive depth
@@ -92,16 +101,39 @@ sub new {
   return bless($s, $c);
 }
 
+if ($] >= 5.008) {
+  # Packed numeric addresses take less memory. Plus pack is faster than sprintf
+  *init_refaddr_format = sub {};
+
+  *format_refaddr  = sub {
+    require Scalar::Util;
+    pack "J", Scalar::Util::refaddr(shift);
+  };
+} else {
+  *init_refaddr_format = sub {
+    require Config;
+    my $f = $Config::Config{uvxformat};
+    $f =~ tr/"//d;
+    our $refaddr_format = "0x%" . $f;
+  };
+
+  *format_refaddr = sub {
+    require Scalar::Util;
+    sprintf our $refaddr_format, Scalar::Util::refaddr(shift);
+  }
+}
+
 #
 # add-to or query the table of already seen references
 #
 sub Seen {
   my($s, $g) = @_;
   if (defined($g) && (ref($g) eq 'HASH'))  {
+    init_refaddr_format();
     my($k, $v, $id);
     while (($k, $v) = each %$g) {
       if (defined $v and ref $v) {
-	($id) = (overload::StrVal($v) =~ /\((.*)\)$/);
+	$id = format_refaddr($v);
 	if ($k =~ /^[*](.*)$/) {
 	  $k = (ref $v eq 'ARRAY') ? ( "\\\@" . $1 ) :
 	       (ref $v eq 'HASH')  ? ( "\\\%" . $1 ) :
@@ -171,6 +203,7 @@ sub Dumpperl {
   my(@out, $val, $name);
   my($i) = 0;
   local(@post);
+  init_refaddr_format();
 
   $s = $s->new(@_) unless ref $s;
 
@@ -215,6 +248,13 @@ sub Dumpperl {
   return wantarray ? @out : join('', @out);
 }
 
+# wrap string in single quotes (escaping if needed)
+sub _quote {
+    my $val = shift;
+    $val =~ s/([\\\'])/\\$1/g;
+    return  "'" . $val .  "'";
+}
+
 #
 # twist, toil and turn;
 # and recurse, of course.
@@ -231,13 +271,19 @@ sub _dump {
 
   if ($type) {
 
-    # prep it, if it looks like an object
-    if (my $freezer = $s->{freezer}) {
-      $val->$freezer() if UNIVERSAL::can($val, $freezer);
+    # Call the freezer method if it's specified and the object has the
+    # method.  Trap errors and warn() instead of die()ing, like the XS
+    # implementation.
+    my $freezer = $s->{freezer};
+    if ($freezer and UNIVERSAL::can($val, $freezer)) {
+      eval { $val->$freezer() };
+      warn "WARNING(Freezer method call failed): $@" if $@;
     }
 
-    ($realpack, $realtype, $id) =
-      (overload::StrVal($val) =~ /^(?:(.*)\=)?([^=]*)\(([^\(]*)\)$/);
+    require Scalar::Util;
+    $realpack = Scalar::Util::blessed($val);
+    $realtype = $realpack ? Scalar::Util::reftype($val) : ref $val;
+    $id = format_refaddr($val);
 
     # if it has a name, we need to either look it up, or keep a tab
     # on it so we know when we hit it later
@@ -275,11 +321,11 @@ sub _dump {
 			    $val ];
       }
     }
-
-    if ($realpack and $realpack eq 'Regexp') {
-	$out = "$val";
-	$out =~ s,/,\\/,g;
-	return "qr/$out/";
+    my $no_bless = 0; 
+    my $is_regex = 0;
+    if ( $realpack and ($] >= 5.009005 ? re::is_regexp($val) : $realpack eq 'Regexp') ) {
+        $is_regex = 1;
+        $no_bless = $realpack eq 'Regexp';
     }
 
     # If purity is not set and maxdepth is set, then check depth: 
@@ -294,7 +340,7 @@ sub _dump {
     }
 
     # we have a blessed ref
-    if ($realpack) {
+    if ($realpack and !$no_bless) {
       $out = $s->{'bless'} . '( ';
       $blesspad = $s->{apad};
       $s->{apad} .= '       ' if ($s->{indent} >= 2);
@@ -303,7 +349,28 @@ sub _dump {
     $s->{level}++;
     $ipad = $s->{xpad} x $s->{level};
 
-    if ($realtype eq 'SCALAR' || $realtype eq 'REF') {
+    if ($is_regex) {
+        my $pat;
+        # This really sucks, re:regexp_pattern is in ext/re/re.xs and not in 
+        # universal.c, and even worse we cant just require that re to be loaded
+        # we *have* to use() it. 
+        # We should probably move it to universal.c for 5.10.1 and fix this.
+        # Currently we only use re::regexp_pattern when the re is blessed into another
+        # package. This has the disadvantage of meaning that a DD dump won't round trip
+        # as the pattern will be repeatedly wrapped with the same modifiers.
+        # This is an aesthetic issue so we will leave it for now, but we could use
+        # regexp_pattern() in list context to get the modifiers separately.
+        # But since this means loading the full debugging engine in process we wont
+        # bother unless its necessary for accuracy.
+        if (($realpack ne 'Regexp') && defined(*re::regexp_pattern{CODE})) {
+            $pat = re::regexp_pattern($val);
+        } else {
+            $pat = "$val";
+        }
+        $pat =~ s,/,\\/,g;
+        $out .= "qr/$pat/";
+    }
+    elsif ($realtype eq 'SCALAR' || $realtype eq 'REF') {
       if ($realpack) {
 	$out .= 'do{\\(my $o = ' . $s->_dump($$val, "\${$name}") . ')}';
       }
@@ -357,6 +424,10 @@ sub _dump {
 	  $keys = [ sort keys %$val ];
 	}
       }
+
+      # Ensure hash iterator is reset
+      keys(%$val);
+
       while (($k, $v) = ! $sortkeys ? (each %$val) :
 	     @$keys ? ($key = shift(@$keys), $val->{$key}) :
 	     () ) 
@@ -381,7 +452,7 @@ sub _dump {
       if ($s->{deparse}) {
 	require B::Deparse;
 	my $sub =  'sub ' . (B::Deparse->new)->coderef2text($val);
-	$pad    =  $s->{sep} . $s->{pad} . $s->{xpad} . $s->{apad} . '    ';
+	$pad    =  $s->{sep} . $s->{pad} . $s->{apad} . $s->{xpad} x ($s->{level} - 1);
 	$sub    =~ s/\n/$pad/gse;
 	$out   .=  $sub;
       } else {
@@ -393,8 +464,8 @@ sub _dump {
       croak "Can\'t handle $realtype type.";
     }
     
-    if ($realpack) { # we have a blessed ref
-      $out .= ', \'' . $realpack . '\'' . ' )';
+    if ($realpack and !$no_bless) { # we have a blessed ref
+      $out .= ', ' . _quote($realpack) . ' )';
       $out .= '->' . $s->{toaster} . '()'  if $s->{toaster} ne '';
       $s->{apad} = $blesspad;
     }
@@ -406,7 +477,7 @@ sub _dump {
     my $ref = \$_[1];
     # first, catalog the scalar
     if ($name ne '') {
-      ($id) = ("$ref" =~ /\(([^\(]*)\)$/);
+      $id = format_refaddr($ref);
       if (exists $s->{seen}{$id}) {
         if ($s->{seen}{$id}[2]) {
 	  $out = $s->{seen}{$id}[0];
@@ -454,12 +525,11 @@ sub _dump {
     }
     else {				 # string
       if ($s->{useqq} or $val =~ tr/\0-\377//c) {
-        # Fall back to qq if there's unicode
+        # Fall back to qq if there's Unicode
 	$out .= qquote($val, $s->{useqq});
       }
       else {
-	$val =~ s/([\\\'])/\\$1/g;
-	$out .= '\'' . $val .  '\'';
+        $out .= _quote($val);
       }
     }
   }
@@ -703,7 +773,8 @@ The default output of self-referential structures can be C<eval>ed, but the
 nested references to C<$VAR>I<n> will be undefined, since a recursive
 structure cannot be constructed using one Perl statement.  You should set the
 C<Purity> flag to 1 to get additional statements that will correctly fill in
-these references.
+these references.  Moreover, if C<eval>ed when strictures are in effect,
+you need to ensure that any variables it accesses are previously declared.
 
 In the extended usage form, the references to be dumped can be given
 user-specified names.  If a name begins with a C<*>, the output will 
@@ -885,6 +956,10 @@ different package.  The client is responsible for making sure the specified
 method can be called via the object, and that the object ends up containing
 only perl data types after the method has been called.  Defaults to an empty
 string.
+
+If an object does not support the method specified (determined using
+UNIVERSAL::can()) then the call will be skipped.  If the method dies a
+warning will be generated.
 
 =item *
 
@@ -1189,7 +1264,7 @@ Someday, perl will have a switch to cache-on-demand the string
 representation of a compiled piece of code, I hope.  If you have prior
 knowledge of all the code refs that your data structures are likely
 to have, you can use the C<Seen> method to pre-seed the internal reference
-table and make the dumped output point to them, instead.  See L<EXAMPLES>
+table and make the dumped output point to them, instead.  See L</EXAMPLES>
 above.
 
 The C<Useqq> and C<Deparse> flags makes Dump() run slower, since the

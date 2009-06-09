@@ -48,7 +48,15 @@ sub TEST {
 	: "not ok $TNUM$name\n--Expected--\n$WANT\n--Got--\n$@$t\n");
 
   ++$TNUM;
-  eval "$t";
+  if ($Is_ebcdic) { # EBCDIC.
+      if ($TNUM == 311 || $TNUM == 314) {
+	  eval $string;
+      } else {
+	  eval $t;
+      }
+  } else {
+      eval "$t";
+  }
   print $@ ? "not ok $TNUM\n# \$@ says: $@\n" : "ok $TNUM\n";
 
   $t = eval $string;
@@ -115,11 +123,11 @@ $WANT = <<'EOT';
 #       $a->[1]{'c'}
 #     ];
 #$b = $a->[1];
-#$c = $a->[1]{'c'};
+#$6 = $a->[1]{'c'};
 EOT
 
-TEST q(Data::Dumper->Dump([$a,$b,$c], [qw(a b c)]));
-TEST q(Data::Dumper->Dumpxs([$a,$b,$c], [qw(a b c)])) if $XS;
+TEST q(Data::Dumper->Dump([$a,$b,$c], [qw(a b), 6]));
+TEST q(Data::Dumper->Dumpxs([$a,$b,$c], [qw(a b), 6])) if $XS;
 
 
 ############# 7
@@ -960,12 +968,16 @@ TEST q(Data::Dumper->new([[$c, $d]])->Dumpxs;)
   $WANT = <<'EOT';
 #$VAR1 = {
 #          foo => sub {
-#                         print 'foo';
-#                     }
+#                     print 'foo';
+#                 }
 #        };
 EOT
 
-  TEST q(Data::Dumper->new([{ foo => sub { print "foo"; } }])->Dump);
+  if(" $Config{'extensions'} " !~ m[ B ]) {
+    SKIP_TEST "Perl configured without B module";
+  } else {
+    TEST q(Data::Dumper->new([{ foo => sub { print "foo"; } }])->Dump);
+  }
 }
 
 ############# 214
@@ -1162,18 +1174,30 @@ TEST q(Data::Dumper->new(\@strings_ns)->Dump), 'Strings NV,PV';
 TEST q(Data::Dumper->new(\@strings_ni)->Dump), 'Strings NV,IV';
 TEST q(Data::Dumper->new(\@strings_nis)->Dump), 'Strings NV,IV,PV';
 if ($XS) {
+ my $nv_preserves_uv = defined $Config{d_nv_preserves_uv};
+ my $nv_preserves_uv_4bits = exists($Config{nv_preserves_uv_bits}) && $Config{nv_preserves_uv_bits} >= 4;
   $WANT=$WANT_XS_N;
   TEST q(Data::Dumper->new(\@numbers)->Dumpxs), 'XS Numbers';
   TEST q(Data::Dumper->new(\@numbers_s)->Dumpxs), 'XS Numbers PV';
+ if ($nv_preserves_uv || $nv_preserves_uv_4bits) {
   $WANT=$WANT_XS_I;
   TEST q(Data::Dumper->new(\@numbers_i)->Dumpxs), 'XS Numbers IV';
   TEST q(Data::Dumper->new(\@numbers_is)->Dumpxs), 'XS Numbers IV,PV';
+ } else {
+  SKIP_TEST "NV does not preserve 4bits";
+  SKIP_TEST "NV does not preserve 4bits";
+ }
   $WANT=$WANT_XS_N;
   TEST q(Data::Dumper->new(\@numbers_n)->Dumpxs), 'XS Numbers NV';
   TEST q(Data::Dumper->new(\@numbers_ns)->Dumpxs), 'XS Numbers NV,PV';
+ if ($nv_preserves_uv || $nv_preserves_uv_4bits) {
   $WANT=$WANT_XS_I;
   TEST q(Data::Dumper->new(\@numbers_ni)->Dumpxs), 'XS Numbers NV,IV';
   TEST q(Data::Dumper->new(\@numbers_nis)->Dumpxs), 'XS Numbers NV,IV,PV';
+ } else {
+  SKIP_TEST "NV does not preserve 4bits";
+  SKIP_TEST "NV does not preserve 4bits";
+ }
 
   $WANT=$WANT_XS_S;
   TEST q(Data::Dumper->new(\@strings)->Dumpxs), 'XS Strings';
@@ -1182,9 +1206,14 @@ if ($XS) {
   $WANT=$WANT_PL_S;
   TEST q(Data::Dumper->new(\@strings_i)->Dumpxs), 'XS Strings IV';
   TEST q(Data::Dumper->new(\@strings_is)->Dumpxs), 'XS Strings IV,PV';
+ if ($nv_preserves_uv || $nv_preserves_uv_4bits) {
   $WANT=$WANT_XS_S;
   TEST q(Data::Dumper->new(\@strings_n)->Dumpxs), 'XS Strings NV';
   TEST q(Data::Dumper->new(\@strings_ns)->Dumpxs), 'XS Strings NV,PV';
+ } else {
+  SKIP_TEST "NV does not preserve 4bits";
+  SKIP_TEST "NV does not preserve 4bits";
+ }
   # This one used to really mess up. New code actually emulates the .pm code
   $WANT=$WANT_PL_S;
   TEST q(Data::Dumper->new(\@strings_ni)->Dumpxs), 'XS Strings NV,IV';
@@ -1281,20 +1310,37 @@ EOT
 
 #XXX}
 {
-  $b = "Bad. XS didn't escape dollar sign";
+    if ($Is_ebcdic) {
+	$b = "Bad. XS didn't escape dollar sign";
 ############# 322
-  $WANT = <<"EOT"; # Careful. This is '' string written inside '' here doc
+	$WANT = <<"EOT"; # Careful. This is '' string written inside '' here doc
+#\$VAR1 = '\$b\"\@\\\\\xB1';
+EOT
+        $a = "\$b\"\@\\\xB1\x{100}";
+	chop $a;
+	TEST q(Data::Dumper->Dump([$a])), "utf8 flag with \" and \$";
+	if ($XS) {
+	    $WANT = <<'EOT'; # While this is "" string written inside "" here doc
+#$VAR1 = "\$b\"\@\\\x{b1}";
+EOT
+            TEST q(Data::Dumper->Dumpxs([$a])), "XS utf8 flag with \" and \$";
+	}
+    } else {
+	$b = "Bad. XS didn't escape dollar sign";
+############# 322
+	$WANT = <<"EOT"; # Careful. This is '' string written inside '' here doc
 #\$VAR1 = '\$b\"\@\\\\\xA3';
 EOT
 
-  $a = "\$b\"\@\\\xA3\x{100}";
-  chop $a;
-  TEST q(Data::Dumper->Dump([$a])), "utf8 flag with \" and \$";
-  if ($XS) {
-    $WANT = <<'EOT'; # While this is "" string written inside "" here doc
+        $a = "\$b\"\@\\\xA3\x{100}";
+	chop $a;
+	TEST q(Data::Dumper->Dump([$a])), "utf8 flag with \" and \$";
+	if ($XS) {
+	    $WANT = <<'EOT'; # While this is "" string written inside "" here doc
 #$VAR1 = "\$b\"\@\\\x{a3}";
 EOT
-    TEST q(Data::Dumper->Dumpxs([$a])), "XS utf8 flag with \" and \$";
+            TEST q(Data::Dumper->Dumpxs([$a])), "XS utf8 flag with \" and \$";
+	}
   }
   # XS used to produce "$b\"' which is 4 chars, not 3. [ie wrongly qq(\$b\\\")]
 ############# 328
