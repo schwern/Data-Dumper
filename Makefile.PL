@@ -10,4 +10,5 @@ WriteMakefile(
 			   },
 	MAN3PODS	=> {},
         DEFINE            => '-DUSE_PPPORT_H',
+        INSTALLDIRS       => 'perl',
 );
