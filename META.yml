@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Data-Dumper
-version:            2.124
+version:            2.125
 abstract:           ~
 author:  []
 license:            unknown
@@ -10,6 +10,10 @@ configure_requires:
 build_requires:
     ExtUtils::MakeMaker:  0
 requires:  {}
+resources:
+    bugtracker:   http://rt.perl.org/perlbug/
+    MailingList:  http://lists.cpan.org/showlist.cgi?name=perl5-porters
+    repository:   git://perl5.git.perl.org/perl.git perl-git
 no_index:
     directory:
         - t
